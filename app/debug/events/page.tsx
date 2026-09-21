@@ -5,20 +5,18 @@ import { useEffect, useRef, useState } from 'react'
 /**
  * TEMPORARY. Delete before shipping.
  *
- * Exists to prove the bus -> SSE chain survives a real deploy, where a proxy
- * sitting in front of the app is what usually breaks streaming. Verify on
- * Railway, not just locally.
+ * Proves the bus -> SSE chain survives a real deploy, where a proxy in front of
+ * the app is what usually breaks streaming. Verify on Railway, not just
+ * locally. Fan-out is in-process, so events come from service functions running
+ * in this server process - creating an assignment emits one.
  *
- * Fan-out is in-process, so events come from service functions in
- * lib/scheduling/* running inside THIS server process - creating an assignment
- * emits one. There is no longer any way to inject an event from psql; the
- * previous pg_notify trick only worked while the bus listened on a Postgres
- * channel.
+ * Requires an admin or manager session for the location; see /login.
  */
 export default function DebugEventsPage() {
   const [locationId, setLocationId] = useState('')
   const [connected, setConnected] = useState(false)
   const [lines, setLines] = useState<string[]>([])
+  const [refetches, setRefetches] = useState(0)
   const sourceRef = useRef<EventSource | null>(null)
 
   const log = (line: string) =>
@@ -28,6 +26,11 @@ export default function DebugEventsPage() {
     return () => sourceRef.current?.close()
   }, [])
 
+  // Stands in for the real query a page would re-run.
+  function refetch() {
+    setRefetches((n) => n + 1)
+  }
+
   function connect() {
     sourceRef.current?.close()
     if (!locationId) return
@@ -35,14 +38,20 @@ export default function DebugEventsPage() {
     const source = new EventSource(`/api/events/${encodeURIComponent(locationId)}`)
     sourceRef.current = source
 
+    // The stream is lossy: events published while a client is disconnected are
+    // gone, because nothing is buffered server-side. So it is treated as a
+    // cache-invalidation hint, not a data channel - refetching on every open,
+    // including reconnects, is what makes a missed event harmless.
     source.onopen = () => {
       setConnected(true)
-      log('open')
+      log('open -> refetch')
+      refetch()
     }
     source.addEventListener('ready', (e) => log(`ready ${(e as MessageEvent).data}`))
-    source.addEventListener('schedule_change', (e) =>
-      log(`schedule_change ${(e as MessageEvent).data}`),
-    )
+    source.addEventListener('schedule_change', (e) => {
+      log(`schedule_change ${(e as MessageEvent).data} -> refetch`)
+      refetch()
+    })
     // Fires on network drop too; EventSource retries on its own.
     source.onerror = () => {
       setConnected(false)
@@ -76,7 +85,10 @@ export default function DebugEventsPage() {
         </button>
       </div>
 
-      <p>status: {connected ? 'connected' : 'disconnected'}</p>
+      <p>
+        status: {connected ? 'connected' : 'disconnected'} · refetches:{' '}
+        {refetches}
+      </p>
       <p style={{ color: '#666' }}>
         Heartbeats are SSE comments, so they are invisible to EventSource by
         design. Watch the Network tab if you want to see them arrive.

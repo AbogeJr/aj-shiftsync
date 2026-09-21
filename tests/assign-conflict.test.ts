@@ -5,20 +5,15 @@ import { assignments, locations, shifts, staff } from '@/lib/db/schema'
 import { assignStaffToShift } from '@/lib/scheduling/assign'
 import { ConflictError } from '@/lib/scheduling/errors'
 
-/**
- * Integration test against a REAL Postgres. Nothing here is mocked, on purpose:
- * the thing under test is a database constraint, and a mock of the database
- * would be a mock of the only component whose behaviour is in question.
- *
- * Requires DATABASE_URL and a migrated database (npm run migrate).
- */
+// Integration test against a real Postgres. Nothing is mocked: the thing under
+// test IS the database constraint. Requires DATABASE_URL and `npm run migrate`.
 
 const H = 60 * 60 * 1000
 let locationId: string
 let staffId: string
 
-// Anchored well clear of any DST transition so the fixtures stay boring; DST
-// correctness is the availability layer's problem, not this constraint's.
+// Clear of any DST transition - DST correctness is the availability layer's
+// problem, not this constraint's.
 const BASE = new Date('2026-06-02T09:00:00.000Z')
 
 async function createShift(startsAt: Date, endsAt: Date): Promise<string> {
@@ -78,9 +73,7 @@ function randomSuffix() {
 
 describe('no_overlap_or_short_rest under concurrency', () => {
   it('lets exactly one of two racing conflicting assignments through', async () => {
-    // Two different shifts, 4 hours apart: they overlap, so both assignments
-    // cannot legally coexist. Two separate transactions on two separate pooled
-    // connections, started together.
+    // Two overlapping shifts, assigned concurrently on separate connections.
     const shiftA = await createShift(BASE, new Date(BASE.getTime() + 8 * H))
     const shiftB = await createShift(
       new Date(BASE.getTime() + 4 * H),
@@ -109,8 +102,7 @@ describe('no_overlap_or_short_rest under concurrency', () => {
   })
 
   it('treats under-10h rest as a conflict and exactly-10h as legal', async () => {
-    // Runs after the first test, which already left one active assignment
-    // covering BASE .. BASE+8h (or BASE+4h .. BASE+12h). Work from a clean slate.
+    // The previous test left an active assignment behind.
     await db.delete(assignments).where(eq(assignments.staffId, staffId))
 
     const day1 = await createShift(BASE, new Date(BASE.getTime() + 8 * H))
@@ -125,8 +117,7 @@ describe('no_overlap_or_short_rest under concurrency', () => {
       ConflictError,
     )
 
-    // Starts exactly 10h after day1 ends. Half-open ranges touch without
-    // overlapping, so compliant rest is not rejected.
+    // Exactly 10h after day1 ends: half-open ranges touch without overlapping.
     const exactlyTenHours = await createShift(
       new Date(BASE.getTime() + 18 * H),
       new Date(BASE.getTime() + 22 * H),

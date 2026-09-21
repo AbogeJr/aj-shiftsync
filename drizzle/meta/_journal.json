@@ -15,6 +15,13 @@
       "when": 1790084229579,
       "tag": "0001_no_overlap_or_short_rest",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790109674290,
+      "tag": "0002_brief_requirements",
+      "breakpoints": true
     }
   ]
 }

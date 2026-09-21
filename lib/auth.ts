@@ -4,21 +4,15 @@ import { requireAuthSecret } from '@/lib/env'
 import { staffRole } from '@/lib/db/schema'
 
 /**
- * Demo-scoped authentication.
- *
- * A session is a JSON payload plus an HMAC-SHA256 signature over it, stored in
- * an httpOnly cookie. That is enough to make the role trustworthy on the server
- * - a client cannot forge a signature without AUTH_SECRET - and it needs no
- * dependency beyond node:crypto.
- *
- * It is deliberately NOT production auth. There are no passwords, no
- * registration and no refresh; the signature carries no expiry, so a leaked
- * cookie stays valid until AUTH_SECRET is rotated. See the README.
+ * Demo-scoped auth: a JSON payload plus an HMAC-SHA256 signature in an httpOnly
+ * cookie. Enough to make the role trustworthy server-side, with no dependency
+ * beyond node:crypto. Not production auth - no passwords, no expiry in the
+ * signature, no revocation. See the README.
  */
 
 export const SESSION_COOKIE = 'shiftsync_session'
 
-/** Mirrors the staff_role enum, so the two cannot drift apart. */
+/** Mirrors the staff_role enum so the two cannot drift apart. */
 export type Role = (typeof staffRole.enumValues)[number]
 
 export interface SessionPayload {
@@ -26,7 +20,7 @@ export interface SessionPayload {
   role: Role
 }
 
-/** The seeded one-click accounts. Single source of truth for seed and login. */
+/** Seeded one-click accounts. Shared by the seed script and the login action. */
 export const DEMO_ACCOUNTS: ReadonlyArray<{ role: Role; email: string; name: string }> = [
   { role: 'admin', email: 'admin@shiftsync.test', name: 'Avery Admin' },
   { role: 'manager', email: 'manager@shiftsync.test', name: 'Morgan Manager' },
@@ -53,7 +47,6 @@ function sign(body: string): Buffer {
   return createHmac('sha256', requireAuthSecret()).update(body).digest()
 }
 
-/** `base64url(payload).base64url(signature)` */
 export function signSession(payload: SessionPayload): string {
   const body = Buffer.from(JSON.stringify(payload)).toString('base64url')
   return `${body}.${sign(body).toString('base64url')}`
@@ -67,9 +60,8 @@ export function verifySession(token: string): SessionPayload | null {
   const expected = sign(body)
   const provided = Buffer.from(signature, 'base64url')
 
-  // timingSafeEqual throws on a length mismatch, so compare lengths first. That
-  // check is not itself timing-safe, but the length of an HMAC-SHA256 digest is
-  // public information - it leaks nothing about the secret.
+  // timingSafeEqual throws on a length mismatch. Comparing lengths first is not
+  // itself timing-safe, but digest length is public and leaks nothing.
   if (provided.length !== expected.length) return null
   if (!timingSafeEqual(provided, expected)) return null
 
@@ -83,19 +75,15 @@ export function verifySession(token: string): SessionPayload | null {
   }
 }
 
-/** Reads the session cookie. Server context only. */
+/** Server context only. */
 export async function getSession(): Promise<SessionPayload | null> {
   const token = (await cookies()).get(SESSION_COOKIE)?.value
   return token ? verifySession(token) : null
 }
 
 /**
- * Authorization guard. Call this from service functions in lib/scheduling/*,
- * not from route handlers or actions - a check in the caller can be skipped by
- * the next caller that forgets it.
- *
- * @throws UnauthorizedError when there is no valid session.
- * @throws ForbiddenError when the session's role is not permitted.
+ * Call from service functions in lib/scheduling/*, not from route handlers or
+ * actions - a check in the caller only protects that one caller.
  */
 export async function requireRole(...allowed: Role[]): Promise<SessionPayload> {
   const session = await getSession()

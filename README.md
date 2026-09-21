@@ -160,12 +160,16 @@ lib/realtime/bus.ts                  In-process EventEmitter + event contract
 lib/scheduling/assign.ts             Assignment service function
 lib/scheduling/errors.ts             ConflictError, NotFoundError
 lib/auth.ts                          Signed-cookie sessions + requireRole
+lib/scheduling/access.ts             Location authorization guard
 app/login/                           Demo one-click sign-in
 drizzle/0001_*.sql                   The exclusion constraint
 ```
 
 Business logic is plain functions under `lib/scheduling/`. Route handlers and
 server actions call into them and do nothing else.
+
+Design decisions and assumptions: [docs/decisions.md](docs/decisions.md).
+Data model: [docs/schema.md](docs/schema.md).
 
 ## Scripts
 
@@ -254,11 +258,10 @@ brief asking for it, standalone would strip the source tree that
 
 ## Known gaps
 
-- `/api/events/[locationId]` is still unauthenticated — it has a `TODO(auth)`
-  marking where the manager-of-this-location check belongs. `requireRole()`
-  exists and is ready to be called from the service layer behind it.
-- There are no mutation endpoints yet, so `requireRole()` has no call sites.
-  Authorization belongs in `lib/scheduling/*` when the first mutation lands.
+- Swap, drop, clock-in/out, compliance overrides, notification preferences and
+  email simulation exist in the schema but have no service layer yet.
+- `requireLocationAccess()` guards the event stream. Mutations will need the
+  same guard in `lib/scheduling/*` as they are added.
 - `lib/scheduling/assign.ts` has a `TODO(validator)` in the conflict path where
   the pure validator will produce the human-readable explanation.
 - `npm audit` reports a moderate advisory (GHSA-67mh-4wv8-2f99) against

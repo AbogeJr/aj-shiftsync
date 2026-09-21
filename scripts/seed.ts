@@ -1,11 +1,14 @@
-/**
- * Seed stub. Creates the four locations and the demo sign-in accounts.
- *
- * Run with: npm run seed
- */
+// Seed stub: four locations and the demo sign-in accounts. `npm run seed`.
 import { pool, db } from '@/lib/db'
-import { locations, managerLocations, staff } from '@/lib/db/schema'
+import { locations, managerLocations, skills, staff } from '@/lib/db/schema'
 import { DEMO_ACCOUNTS } from '@/lib/auth'
+
+const SKILLS = [
+  { name: 'bartender', description: 'Mixes and serves drinks' },
+  { name: 'line cook', description: 'Works the hot line' },
+  { name: 'server', description: 'Takes orders and runs food' },
+  { name: 'host', description: 'Seats guests and manages the waitlist' },
+]
 
 const LOCATIONS = [
   { name: 'Mission Bay', timezone: 'America/Los_Angeles' },
@@ -15,6 +18,9 @@ const LOCATIONS = [
 ]
 
 async function main() {
+  await db.insert(skills).values(SKILLS).onConflictDoNothing()
+  console.log(`skills: ${SKILLS.map((s) => s.name).join(', ')}`)
+
   const insertedLocations = await db
     .insert(locations)
     .values(LOCATIONS)
@@ -24,8 +30,7 @@ async function main() {
     console.log(`${location.id}  ${location.timezone.padEnd(20)}  ${location.name}`)
   }
 
-  // The one-click accounts behind /login. Re-runnable: onConflictDoUpdate keeps
-  // the email unique index happy if the seed is applied twice.
+  // Re-runnable: onConflictDoUpdate keeps the email unique index happy.
   const insertedStaff = await db
     .insert(staff)
     .values(
@@ -44,8 +49,7 @@ async function main() {
     console.log(`${member.id}  ${member.role.padEnd(20)}  ${member.email}`)
   }
 
-  // Give the demo manager something to manage, so requireRole('manager')
-  // checks have a location to authorize against.
+  // Give the demo manager locations to authorize against.
   const manager = insertedStaff.find((m) => m.role === 'manager')
   if (manager) {
     await db

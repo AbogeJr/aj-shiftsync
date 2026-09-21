@@ -1,25 +1,15 @@
-/** Typed errors raised by lib/scheduling/*. Route handlers map these to status codes. */
+// Typed errors raised by lib/scheduling/*. Callers map these to status codes.
 
 export const NO_OVERLAP_OR_SHORT_REST = 'no_overlap_or_short_rest'
 
-/**
- * A write was rejected because it would have broken a scheduling invariant that
- * the database enforces. Currently only ever raised for the
- * no_overlap_or_short_rest exclusion constraint.
- */
+/** A write rejected by a database-enforced scheduling invariant. */
 export class ConflictError extends Error {
   readonly name = 'ConflictError'
-  /** Stable discriminator for callers that switch on the failure. */
   readonly code = 'SCHEDULING_CONFLICT' as const
-  /** Postgres constraint that rejected the write. */
   readonly constraint: string
-  /**
-   * Human-readable account of WHICH shift conflicted and whether it was an
-   * overlap or a short rest. Populated by the pure validator; undefined when
-   * the validator has not run. See lib/scheduling/assign.ts.
-   */
+  /** Which shift collided and why. Populated by the validator; see assign.ts. */
   readonly explanation?: string
-  /** Raw Postgres DETAIL line, for logs. Never show this to an end user. */
+  /** Raw Postgres DETAIL, for logs only. Never shown to an end user. */
   readonly detail?: string
 
   constructor(args: {
@@ -33,6 +23,15 @@ export class ConflictError extends Error {
     this.constraint = args.constraint
     this.explanation = args.explanation
     this.detail = args.detail
+  }
+}
+
+/** The caller may not act on this location. */
+export class LocationAccessError extends Error {
+  readonly name = 'LocationAccessError'
+  readonly code = 'LOCATION_FORBIDDEN' as const
+  constructor(locationId: string) {
+    super(`Not permitted for location ${locationId}`)
   }
 }
 
@@ -54,10 +53,7 @@ interface PgErrorShape {
   detail?: string
 }
 
-/**
- * Drizzle wraps driver errors, so the pg error can sit one or more `cause`
- * levels down. Walk the chain rather than assuming a depth.
- */
+/** Drizzle wraps driver errors, so walk the `cause` chain rather than assume a depth. */
 export function asPostgresError(err: unknown): PgErrorShape | undefined {
   let current: unknown = err
   for (let depth = 0; current && depth < 5; depth++) {

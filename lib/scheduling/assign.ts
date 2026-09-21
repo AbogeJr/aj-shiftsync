@@ -22,15 +22,10 @@ export type Assignment = typeof assignments.$inferSelect
 /**
  * Assign a staff member to a shift.
  *
- * A plain function, deliberately not a route handler: route handlers and server
- * actions call this and do nothing but translate its result to a response.
- *
- * Correctness rests on the database, not on a check performed here. The
- * no_overlap_or_short_rest exclusion constraint (drizzle/0001_*.sql) is what
- * guarantees no double-booking and no sub-10-hour turnaround, and it holds
- * under concurrent writers - a pre-flight SELECT would not, because two
- * requests can both read "no conflict" before either inserts. So the shape here
- * is attempt-then-interpret rather than check-then-write.
+ * Correctness rests on the no_overlap_or_short_rest exclusion constraint
+ * (drizzle/0001_*.sql), not on a check here: two concurrent requests can both
+ * read "no conflict" before either inserts, so the shape is
+ * attempt-then-interpret rather than check-then-write.
  *
  * @throws NotFoundError when the shift does not exist.
  * @throws ConflictError when the assignment would overlap or break rest.
@@ -56,11 +51,9 @@ export async function assignStaffToShift(
 
       if (!shift) throw new NotFoundError('Shift', shiftId)
 
-      // The denormalization sync point. assignments.starts_at/ends_at exist so
-      // the exclusion constraint can see them, and they are only ever derived
-      // from the shift - never supplied by a caller. The mirrored obligation
-      // lives on the edit path: a transaction that moves a shift's times must
-      // update its active assignments before it commits.
+      // Times are derived from the shift, never supplied by a caller. The
+      // mirrored obligation is on the edit path: a transaction that moves a
+      // shift's times must update its active assignments before it commits.
       const [assignment] = await tx
         .insert(assignments)
         .values({
@@ -90,9 +83,7 @@ export async function assignStaffToShift(
       return { assignment, locationId: shift.locationId }
     })
 
-    // Emitted only once the transaction has committed. The bus is in-process
-    // and has no rollback, so announcing from inside the transaction could tell
-    // subscribers about a write that never landed.
+    // After commit only - the bus has no rollback.
     publishScheduleChange({
       locationId,
       type: 'assignment.created',
@@ -104,19 +95,13 @@ export async function assignStaffToShift(
     return assignment
   } catch (err) {
     if (isExclusionViolation(err, NO_OVERLAP_OR_SHORT_REST)) {
-      // The database told us THAT the assignment is illegal. It cannot tell us
-      // WHICH existing shift collided, or whether the cause was an overlap or a
-      // short rest gap - the constraint reports one conflicting key, not a
-      // story a manager can act on.
+      // The constraint reports THAT the write is illegal, not which shift
+      // collided or whether the cause was overlap or short rest.
       //
-      // TODO(validator): call the pure validator here to build `explanation`.
-      // Load the staff member's active assignments in the surrounding window
-      // (shift.starts_at - 10h .. shift.ends_at + 10h) and pass them plus the
-      // candidate interval to it; it returns the human-readable reason, e.g.
-      // "Sam finishes at 22:00 on Tue and this shift starts at 06:00 Wed -
-      // 8 hours rest, 10 required." Keep it a pure function over already-loaded
-      // rows so it is unit-testable without a database, and reuse it for
-      // pre-flight UI warnings on the assignment form.
+      // TODO(validator): build `explanation` here. Load the staff member's
+      // active assignments in shift.starts_at - 10h .. shift.ends_at + 10h and
+      // pass them with the candidate interval to a pure function, so it is
+      // testable without a database and reusable for pre-flight UI warnings.
       const explanation = undefined
 
       throw new ConflictError({

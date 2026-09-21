@@ -1,4 +1,5 @@
 import { subscribeToScheduleChanges } from '@/lib/realtime/bus'
+import { requireLocationAccess } from '@/lib/scheduling/access'
 
 // Must be the Node runtime: the bus holds a long-lived pg TCP connection.
 export const runtime = 'nodejs'
@@ -13,8 +14,12 @@ export async function GET(
 ): Promise<Response> {
   const { locationId } = await params
 
-  // TODO(auth): once Auth.js is wired up, reject callers who do not manage this
-  // location. A location id is guessable, and this stream leaks activity.
+  // A location id is guessable, so the stream is authorized before it opens.
+  try {
+    await requireLocationAccess(locationId)
+  } catch {
+    return new Response('Forbidden', { status: 403 })
+  }
 
   const encoder = new TextEncoder()
 
@@ -38,8 +43,7 @@ export async function GET(
         send(`event: schedule_change\ndata: ${JSON.stringify(event)}\n\n`)
       })
 
-      // A comment line every 15s. Two jobs: it keeps proxies and load balancers
-      // from closing a stream they consider idle, and it is how this process
+      // Keeps proxies from closing an idle stream, and is how this process
       // notices a client that disappeared without a FIN.
       const heartbeat = setInterval(() => {
         send(`: heartbeat ${Date.now()}\n\n`)
@@ -64,9 +68,8 @@ export async function GET(
         return
       }
 
-      // Tell EventSource how long to wait before reconnecting, and open the
-      // stream immediately so the browser fires `onopen` without waiting for
-      // the first real event.
+      // Open the stream immediately so the browser fires `onopen` without
+      // waiting for the first real event.
       send(`retry: 3000\n\n`)
       send(`event: ready\ndata: ${JSON.stringify({ locationId })}\n\n`)
     },
