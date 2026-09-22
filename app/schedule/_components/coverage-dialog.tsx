@@ -86,7 +86,7 @@ export function CoverageDialog({
                   key={candidate.staffId}
                   disabled={pending}
                   onClick={() => assign(candidate.staffId)}
-                  className="flex w-full items-center justify-between rounded-lg border border-slate-300 px-3 py-2.5 text-left hover:border-brand-500 hover:bg-brand-50 disabled:opacity-50"
+                  className="flex w-full items-start justify-between gap-2 rounded-lg border border-slate-300 px-3 py-2.5 text-left hover:border-brand-500 hover:bg-brand-50 disabled:opacity-50"
                 >
                   <span>
                     <span className="block text-sm font-semibold">{candidate.name}</span>
@@ -98,6 +98,11 @@ export function CoverageDialog({
                         <span className="text-green-700"> · {shortfall.toFixed(0)}h under</span>
                       )}
                     </span>
+                    {candidate.warnings.map((warning) => (
+                      <span key={warning} className="mt-1 block text-xs text-amber-700">
+                        ⚠ {warning}
+                      </span>
+                    ))}
                   </span>
                   <span className="text-xs font-medium text-brand-600">
                     {pending ? '…' : 'Assign'}

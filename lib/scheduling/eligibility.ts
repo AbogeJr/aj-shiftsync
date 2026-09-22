@@ -17,9 +17,17 @@ export type EligibilityCode =
   | 'missing_skill'
   | 'not_certified'
   | 'outside_availability'
+  | 'daily_limit'
+  | 'seventh_consecutive_day'
+
+/** Surfaced to the manager but never blocking. */
+export type ComplianceCode =
+  | 'daily_warning'
+  | 'weekly_warning'
+  | 'sixth_consecutive_day'
 
 export interface EligibilityViolation {
-  code: EligibilityCode
+  code: EligibilityCode | ComplianceCode
   /** Written for a manager, naming the person and the specific reason. */
   message: string
 }
@@ -38,7 +46,23 @@ export interface EligibilityContext {
   withinAvailability: boolean | null
   /** The shift in the staff member's own wall clock, for the message. */
   localWindow: { weekday: string; start: string; end: string } | null
+
+  /* Labour-law figures, all in the staff member's own timezone and already
+     including this shift. */
+  shiftHours: number
+  dailyHours: number
+  weeklyHours: number
+  /** Run of consecutive worked days ending on this shift's day, inclusive. */
+  consecutiveDays: number
+  /** A manager has documented a reason to exceed a rule that allows one. */
+  overrideProvided?: boolean
 }
+
+/** Brief §4. Daily 12h is a hard block; the 7th day needs a documented reason. */
+export const DAILY_HARD_LIMIT = 12
+export const DAILY_WARNING_AT = 8
+export const WEEKLY_WARNING_AT = 35
+export const WEEKLY_OVERTIME_AT = 40
 
 export function evaluateEligibility(ctx: EligibilityContext): EligibilityViolation[] {
   const violations: EligibilityViolation[] = []
@@ -73,6 +97,21 @@ export function evaluateEligibility(ctx: EligibilityContext): EligibilityViolati
     })
   }
 
+  if (ctx.dailyHours > DAILY_HARD_LIMIT) {
+    violations.push({
+      code: 'daily_limit',
+      message: `This would put ${ctx.staffName} on ${ctx.dailyHours.toFixed(1)} hours in one day. ${DAILY_HARD_LIMIT} is the hard limit and cannot be overridden.`,
+    })
+  }
+
+  // The brief allows a 7th consecutive day only with a documented reason.
+  if (ctx.consecutiveDays >= 7 && !ctx.overrideProvided) {
+    violations.push({
+      code: 'seventh_consecutive_day',
+      message: `This would be ${ctx.staffName}'s ${ctx.consecutiveDays}th consecutive day. A manager must record a reason to allow it.`,
+    })
+  }
+
   // Null means no availability rules exist for this person, which is treated as
   // "unknown, do not block" rather than "unavailable" - blocking on absent data
   // would make a newly added staff member unschedulable.
@@ -91,4 +130,40 @@ export function evaluateEligibility(ctx: EligibilityContext): EligibilityViolati
 
 export function describeViolations(violations: EligibilityViolation[]): string {
   return violations.map((v) => v.message).join(' ')
+}
+
+/**
+ * Figures a manager should see but that never block an assignment.
+ *
+ * Kept separate from evaluateEligibility so that "would this be refused?" and
+ * "should someone look at this?" cannot be confused at a call site.
+ */
+export function evaluateCompliance(ctx: EligibilityContext): EligibilityViolation[] {
+  const warnings: EligibilityViolation[] = []
+
+  if (ctx.dailyHours > DAILY_WARNING_AT && ctx.dailyHours <= DAILY_HARD_LIMIT) {
+    warnings.push({
+      code: 'daily_warning',
+      message: `${ctx.staffName} would work ${ctx.dailyHours.toFixed(1)} hours that day, over the ${DAILY_WARNING_AT}-hour guideline.`,
+    })
+  }
+
+  if (ctx.weeklyHours >= WEEKLY_WARNING_AT) {
+    const overtime = ctx.weeklyHours > WEEKLY_OVERTIME_AT
+    warnings.push({
+      code: 'weekly_warning',
+      message: overtime
+        ? `${ctx.staffName} would reach ${ctx.weeklyHours.toFixed(1)} hours this week — past ${WEEKLY_OVERTIME_AT} and into overtime.`
+        : `${ctx.staffName} would reach ${ctx.weeklyHours.toFixed(1)} hours this week, approaching the ${WEEKLY_OVERTIME_AT}-hour overtime threshold.`,
+    })
+  }
+
+  if (ctx.consecutiveDays === 6) {
+    warnings.push({
+      code: 'sixth_consecutive_day',
+      message: `This would be ${ctx.staffName}'s 6th consecutive day.`,
+    })
+  }
+
+  return warnings
 }

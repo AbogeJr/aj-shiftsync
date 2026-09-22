@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm'
 import { db as defaultDb, type Db } from '@/lib/db'
 import { requireRole } from '@/lib/auth'
 import { publishScheduleChange } from '@/lib/realtime/bus'
+import { managersOf, notify, notifyAll } from './notifications'
 import { authorizeLocation, SESSION_ACTOR, type Actor } from './access'
 import { evaluateEligibility } from './eligibility'
 import { loadEligibility } from './eligibility-query'
@@ -140,6 +141,13 @@ export async function requestDrop(
     RETURNING id
   `)
 
+  await notifyAll(db, await managersOf(db, assignment.locationId), {
+    type: 'swap.requested',
+    title: 'A shift was offered up',
+    body: 'Someone has put a shift up for grabs. It needs your approval once claimed.',
+    meta: { shiftId: assignment.shiftId },
+  })
+
   publishScheduleChange({ locationId: assignment.locationId, type: 'shift.updated', shiftId: assignment.shiftId })
   return { id: rows.rows[0].id }
 }
@@ -172,6 +180,14 @@ export async function requestSwap(
             ${targetAssignmentId}, ${reason}, 'open')
     RETURNING id
   `)
+
+  await notify(db, {
+    staffId: theirs.staffId,
+    type: 'swap.requested',
+    title: 'A colleague wants to swap shifts with you',
+    body: reason ?? 'Open Requests to accept or decline.',
+    meta: { shiftId: mine.shiftId },
+  })
 
   publishScheduleChange({ locationId: mine.locationId, type: 'shift.updated', shiftId: mine.shiftId })
   return { id: rows.rows[0].id }
@@ -227,6 +243,19 @@ export async function acceptRequest(
     WHERE id = ${requestId} AND status = 'open'
   `)
 
+  await notify(db, {
+    staffId: request.requestedBy,
+    type: 'swap.accepted',
+    title: 'Your request was accepted',
+    body: 'It now needs a manager to approve it.',
+    meta: { shiftId: request.shiftId },
+  })
+  await notifyAll(db, await managersOf(db, request.locationId), {
+    type: 'swap.accepted',
+    title: 'A swap is ready for your approval',
+    meta: { shiftId: request.shiftId },
+  })
+
   publishScheduleChange({ locationId: request.locationId, type: 'shift.updated', shiftId: request.shiftId })
 }
 
@@ -256,6 +285,17 @@ export async function cancelRequest(
     WHERE id = ${requestId} AND status IN ${PENDING}
   `)
 
+  await notifyAll(
+    db,
+    [request.requestedBy, request.requestedTo].filter((id): id is string => id !== null),
+    {
+      type: 'swap.cancelled',
+      title: 'A request was withdrawn',
+      body: 'The schedule is unchanged.',
+      meta: { shiftId: request.shiftId },
+    },
+  )
+
   publishScheduleChange({ locationId: request.locationId, type: 'shift.updated', shiftId: request.shiftId })
 }
 
@@ -266,6 +306,11 @@ export async function rejectRequest(requestId: string, db: Db = defaultDb): Prom
     UPDATE swap_requests SET status = 'rejected', resolved_at = now()
     WHERE id = ${requestId} AND status IN ${PENDING}
   `)
+  await notifyAll(
+    db,
+    [request.requestedBy, request.requestedTo].filter((id): id is string => id !== null),
+    { type: 'swap.rejected', title: 'Your request was declined by a manager', meta: { shiftId: request.shiftId } },
+  )
   publishScheduleChange({ locationId: request.locationId, type: 'shift.updated', shiftId: request.shiftId })
 }
 
@@ -322,6 +367,18 @@ export async function approveRequest(
             approved_at = now(), resolved_at = now()
         WHERE id = ${requestId}
       `)
+
+      // Both parties, in the same transaction as the move itself.
+      await notifyAll(
+        tx,
+        [request.requestedBy, request.requestedTo].filter((id): id is string => id !== null),
+        {
+          type: 'swap.approved',
+          title: 'Your swap was approved',
+          body: 'The schedule has been updated.',
+          meta: { shiftId: request.shiftId },
+        },
+      )
     })
   } catch (err) {
     if (isExclusionViolation(err, NO_OVERLAP_OR_SHORT_REST)) {

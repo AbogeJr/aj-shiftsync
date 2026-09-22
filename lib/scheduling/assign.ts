@@ -1,7 +1,8 @@
 import { eq, sql } from 'drizzle-orm'
 import { db as defaultDb, type Db, type Tx } from '@/lib/db'
-import { assignments, auditLog, shifts } from '@/lib/db/schema'
+import { assignments, auditLog, complianceOverrides, shifts } from '@/lib/db/schema'
 import { publishScheduleChange } from '@/lib/realtime/bus'
+import { notify } from './notifications'
 import { authorizeAssignment, type Actor } from './access'
 import { evaluateEligibility } from './eligibility'
 import { loadEligibility } from './eligibility-query'
@@ -21,6 +22,12 @@ export interface AssignStaffInput {
   shiftId: string
   staffId: string
   actor?: Actor
+  /**
+   * A manager's documented reason for exceeding a rule that permits one - the
+   * 7th consecutive day. Recorded in compliance_overrides alongside the
+   * assignment, so the exception is auditable rather than invisible.
+   */
+  override?: { rule: string; reason: string }
 }
 
 export type Assignment = typeof assignments.$inferSelect
@@ -40,7 +47,7 @@ export async function assignStaffToShift(
   input: AssignStaffInput,
   db: Db = defaultDb,
 ): Promise<Assignment> {
-  const { shiftId, staffId, actor = { kind: 'session' } } = input
+  const { shiftId, staffId, actor = { kind: 'session' }, override } = input
   let actorStaffId: string | null = actor.kind === 'system' ? (actor.staffId ?? null) : null
 
   try {
@@ -77,7 +84,13 @@ export async function assignStaffToShift(
 
       const [candidate] = await loadEligibility(tx, shiftId, staffId)
       if (!candidate) throw new NotFoundError('Shift or staff', `${shiftId}/${staffId}`)
-      const violations = evaluateEligibility(candidate.context)
+
+      // An override only lifts the rule it names, and only rules that allow it.
+      const context = {
+        ...candidate.context,
+        overrideProvided: override?.rule === 'seventh_consecutive_day',
+      }
+      const violations = evaluateEligibility(context)
       if (violations.length > 0) throw new EligibilityError(violations)
 
       // Times are derived from the shift, never supplied by a caller. The
@@ -94,8 +107,33 @@ export async function assignStaffToShift(
         })
         .returning()
 
+      if (override) {
+        if (!override.reason.trim()) {
+          throw new EligibilityError([
+            { code: 'seventh_consecutive_day', message: 'An override needs a documented reason.' },
+          ])
+        }
+        await tx.insert(complianceOverrides).values({
+          assignmentId: assignment.id,
+          rule: override.rule,
+          reason: override.reason.trim(),
+          overriddenBy: actorStaffId ?? staffId,
+        })
+      }
+
+      // Inside the transaction: a rolled-back assignment must not leave a
+      // notification claiming it happened.
+      await notify(tx, {
+        staffId,
+        type: 'shift.assigned',
+        title: 'You have a new shift',
+        body: `${shift.startsAt.toISOString()} — check My shifts for the details.`,
+        meta: { shiftId: shift.id, assignmentId: '' },
+      })
+
       await tx.insert(auditLog).values({
         actorStaffId,
+        locationId: shift.locationId,
         entityType: 'assignment',
         entityId: assignment.id,
         action: 'assignment.created',

@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { cookies } from 'next/headers'
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { requireAuthSecret } from '@/lib/env'
 import { db } from '@/lib/db'
 import { staff, staffRole } from '@/lib/db/schema'
@@ -108,4 +108,48 @@ export async function requireRole(...allowed: Role[]): Promise<SessionPayload> {
   if (!allowed.includes(row.role)) throw new ForbiddenError(allowed, row.role)
 
   return { userId: row.id, role: row.role }
+}
+
+export interface SignInOption {
+  id: string
+  name: string
+  email: string
+  role: Role
+  skills: string[]
+  locations: string[]
+}
+
+/**
+ * Everyone who can be signed in as, for the demo picker.
+ *
+ * Demo-only, and only safe because this build has no passwords at all - see the
+ * README. A real sign-in screen must never enumerate accounts.
+ */
+export async function listSignInOptions(): Promise<SignInOption[]> {
+  const rows = await db.execute<{
+    id: string
+    name: string
+    email: string
+    role: Role
+    skills: string[] | null
+    locations: string[] | null
+  }>(sql`
+    SELECT st.id, st.name, st.email, st.role::text AS role,
+           ARRAY(SELECT k.skill FROM staff_skills k WHERE k.staff_id = st.id ORDER BY k.skill) AS skills,
+           ARRAY(
+             SELECT l.name FROM certifications c JOIN locations l ON l.id = c.location_id
+             WHERE c.staff_id = st.id AND (c.revoked_at IS NULL OR c.revoked_at > now())
+             ORDER BY l.name
+           ) AS locations
+    FROM staff st
+    ORDER BY CASE st.role WHEN 'admin' THEN 0 WHEN 'manager' THEN 1 ELSE 2 END, st.name
+  `)
+  return rows.rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    email: r.email,
+    role: r.role,
+    skills: r.skills ?? [],
+    locations: r.locations ?? [],
+  }))
 }

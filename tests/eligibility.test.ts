@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { evaluateEligibility, type EligibilityContext } from '@/lib/scheduling/eligibility'
+import {
+  DAILY_HARD_LIMIT,
+  evaluateCompliance,
+  evaluateEligibility,
+  type EligibilityContext,
+} from '@/lib/scheduling/eligibility'
 
 const base: EligibilityContext = {
   staffName: 'Sam',
@@ -12,6 +17,10 @@ const base: EligibilityContext = {
   certifiedAtLocation: true,
   withinAvailability: true,
   localWindow: { weekday: 'Thu', start: '09:00', end: '17:00' },
+  shiftHours: 8,
+  dailyHours: 8,
+  weeklyHours: 8,
+  consecutiveDays: 1,
 }
 
 const codes = (ctx: Partial<EligibilityContext>) =>
@@ -46,6 +55,21 @@ describe('eligibility rules', () => {
     expect(codes({ withinAvailability: false })).toContain('outside_availability')
     // Null means no rules on file: unknown must not make someone unschedulable.
     expect(codes({ withinAvailability: null })).toEqual([])
+  })
+
+  it('blocks past the daily hard limit, which no override can lift', () => {
+    expect(codes({ dailyHours: DAILY_HARD_LIMIT + 0.5 })).toContain('daily_limit')
+    expect(codes({ dailyHours: DAILY_HARD_LIMIT })).not.toContain('daily_limit')
+    // Explicitly not overridable - the brief calls 12 hours a hard block.
+    expect(codes({ dailyHours: 13, overrideProvided: true })).toContain('daily_limit')
+  })
+
+  it('blocks a 7th consecutive day unless a reason is recorded', () => {
+    expect(codes({ consecutiveDays: 7 })).toContain('seventh_consecutive_day')
+    expect(codes({ consecutiveDays: 6 })).not.toContain('seventh_consecutive_day')
+    expect(codes({ consecutiveDays: 7, overrideProvided: true })).not.toContain(
+      'seventh_consecutive_day',
+    )
   })
 
   it('reports every reason at once so a manager fixes them together', () => {

@@ -56,3 +56,8 @@ export function money(cents: number): string {
 export function hours(value: number): string {
   return value.toFixed(2)
 }
+
+/** Index matches Postgres `extract(dow)`: 0 = Sunday. Client-safe. */
+export const WEEKDAYS = [
+  'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
+] as const

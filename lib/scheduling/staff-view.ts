@@ -17,6 +17,10 @@ export interface MyShift {
   hours: number
   /** A live swap or drop against this assignment, if any. */
   pendingRequest: { id: string; kind: 'swap' | 'drop'; status: string } | null
+  clockedIn: boolean
+  clockedOut: boolean
+  /** Within an hour of the start, or already under way. */
+  clockable: boolean
 }
 
 export interface OpenShift {
@@ -67,9 +71,15 @@ export async function myWeek(weekStart: string, db: Db = defaultDb): Promise<MyW
     request_id: string | null
     request_kind: 'swap' | 'drop' | null
     request_status: string | null
+    clocked_in: boolean
+    clocked_out: boolean
+    clockable: boolean
   }>(sql`
     SELECT st.name, st.desired_weekly_hours AS desired,
            r.id AS request_id, r.kind::text AS request_kind, r.status::text AS request_status,
+           a.clocked_in_at IS NOT NULL AS clocked_in,
+           a.clocked_out_at IS NOT NULL AS clocked_out,
+           now() >= sh.starts_at - interval '1 hour' AND now() < sh.ends_at + interval '4 hours' AS clockable,
            sh.id, a.id AS assignment_id, l.name AS location, l.timezone,
            to_char(sh.starts_at AT TIME ZONE l.timezone, 'YYYY-MM-DD') AS local_date,
            to_char(sh.starts_at AT TIME ZONE l.timezone, 'HH24:MI')    AS start_local,
@@ -106,6 +116,9 @@ export async function myWeek(weekStart: string, db: Db = defaultDb): Promise<MyW
       pendingRequest: r.request_id
         ? { id: r.request_id, kind: r.request_kind!, status: r.request_status! }
         : null,
+      clockedIn: r.clocked_in,
+      clockedOut: r.clocked_out,
+      clockable: r.clockable,
     }))
 
   return {

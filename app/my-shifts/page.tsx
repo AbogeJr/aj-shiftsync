@@ -8,6 +8,7 @@ import { hours as fmtHours, longDateLabel, timeLabel, weekRangeLabel } from '@/l
 import { skillStyle } from '@/components/ui/skill-style'
 import { ClaimButton } from './_components/claim-button'
 import { OfferUp } from './_components/offer-up'
+import { ClockButton } from './_components/clock-button'
 
 export const dynamic = 'force-dynamic'
 
@@ -74,6 +75,12 @@ export default async function MyShiftsPage() {
                   <span className="w-14 text-right text-xs tabular text-slate-500">
                     {fmtHours(shift.hours)}h
                   </span>
+                  <ClockButton
+                    assignmentId={shift.assignmentId}
+                    clockedIn={shift.clockedIn}
+                    clockedOut={shift.clockedOut}
+                    startsSoonOrStarted={shift.clockable}
+                  />
                   <OfferUp assignmentId={shift.assignmentId} pendingRequest={shift.pendingRequest} />
                 </li>
               ))}

@@ -1,6 +1,8 @@
 import { sql } from 'drizzle-orm'
 import { db as defaultDb, type Db } from '@/lib/db'
 import { publishScheduleChange } from '@/lib/realtime/bus'
+import { notify, notifyAll } from './notifications'
+import { recordAudit } from './audit'
 import { authorizeLocation, SESSION_ACTOR, type Actor } from './access'
 import {
   ConcurrentEditError,
@@ -78,6 +80,20 @@ export async function createShifts(
     VALUES ${sql.join(values, sql`, `)}
   `)
 
+  await recordAudit(db, {
+    locationId: input.locationId,
+    entityType: 'shift',
+    entityId: input.locationId,
+    action: 'shift.created',
+    after: {
+      dates: input.dates,
+      startLocal: input.startLocal,
+      endLocal: input.endLocal,
+      requiredSkill: input.requiredSkill,
+      headcount: input.headcount,
+    },
+  })
+
   publishScheduleChange({ locationId: input.locationId, type: 'shift.updated' })
   return { created: input.dates.length }
 }
@@ -139,6 +155,20 @@ export async function updateShift(
 
       if (updated.rows.length === 0) throw new ConcurrentEditError()
 
+      await recordAudit(tx, {
+        locationId: row.location_id,
+        entityType: 'shift',
+        entityId: input.shiftId,
+        action: 'shift.updated',
+        before: { version: input.version },
+        after: {
+          startLocal: input.startLocal,
+          endLocal: input.endLocal,
+          requiredSkill: input.requiredSkill,
+          headcount: input.headcount,
+        },
+      })
+
       // The sync obligation. Without this the constraint compares stale times.
       await tx.execute(sql`
         UPDATE assignments
@@ -149,6 +179,16 @@ export async function updateShift(
       // Brief §3: a pending swap or drop describes a shift that no longer
       // exists in the form it was agreed on, so it is withdrawn rather than
       // silently applied to different hours.
+      const affected = await tx.execute<{ staff_id: string }>(sql`
+        SELECT staff_id FROM assignments WHERE shift_id = ${input.shiftId} AND status = 'active'
+      `)
+      await notifyAll(tx, affected.rows.map((r) => r.staff_id), {
+        type: 'shift.changed',
+        title: 'One of your shifts changed',
+        body: `New hours: ${input.startLocal}–${input.endLocal}.`,
+        meta: { shiftId: input.shiftId },
+      })
+
       await tx.execute(sql`
         UPDATE swap_requests SET status = 'cancelled', resolved_at = now()
         WHERE status IN ('open', 'peer_accepted')
@@ -196,6 +236,14 @@ export async function deleteShift(
   )
   if (deleted.rows.length === 0) throw new ConcurrentEditError()
 
+  await recordAudit(db, {
+    locationId: row.location_id,
+    entityType: 'shift',
+    entityId: shiftId,
+    action: 'shift.deleted',
+    before: { version },
+  })
+
   publishScheduleChange({ locationId: row.location_id, type: 'shift.updated', shiftId })
 }
 
@@ -205,8 +253,8 @@ export async function unassign(
   db: Db = defaultDb,
   actor: Actor = SESSION_ACTOR,
 ): Promise<void> {
-  const meta = await db.execute<{ location_id: string; shift_id: string }>(sql`
-    SELECT sh.location_id, sh.id AS shift_id
+  const meta = await db.execute<{ location_id: string; shift_id: string; staff_id: string }>(sql`
+    SELECT sh.location_id, sh.id AS shift_id, a.staff_id
     FROM assignments a JOIN shifts sh ON sh.id = a.shift_id
     WHERE a.id = ${assignmentId}
   `)
@@ -216,9 +264,23 @@ export async function unassign(
 
   // Cancelled rather than deleted: the row drops out of the partial exclusion
   // constraint, and the history of who was scheduled survives.
-  await db.execute(
-    sql`UPDATE assignments SET status = 'cancelled' WHERE id = ${assignmentId}`,
-  )
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`UPDATE assignments SET status = 'cancelled' WHERE id = ${assignmentId}`)
+    await recordAudit(tx, {
+      locationId: row.location_id,
+      entityType: 'assignment',
+      entityId: assignmentId,
+      action: 'assignment.cancelled',
+      before: { status: 'active' },
+      after: { status: 'cancelled' },
+    })
+    await notify(tx, {
+      staffId: row.staff_id,
+      type: 'shift.unassigned',
+      title: 'A shift was removed from your schedule',
+      meta: { shiftId: row.shift_id },
+    })
+  })
 
   publishScheduleChange({
     locationId: row.location_id,

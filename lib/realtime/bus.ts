@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 
 export interface ScheduleChangeEvent {
   locationId: string
-  type: 'assignment.created' | 'assignment.cancelled' | 'shift.updated'
+  type: 'assignment.created' | 'assignment.cancelled' | 'shift.updated' | 'attendance.changed'
   shiftId?: string
   assignmentId?: string
   staffId?: string

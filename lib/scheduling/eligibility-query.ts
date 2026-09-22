@@ -34,6 +34,10 @@ export async function loadEligibility(
     weekday: string
     local_start: string
     local_end: string
+    shift_hours: string
+    daily_hours: string
+    weekly_hours: string
+    consecutive_days: number
   }>(sql`
     SELECT
       st.id AS staff_id,
@@ -68,6 +72,38 @@ export async function loadEligibility(
             AND e.end_local   > (sh.starts_at AT TIME ZONE st.availability_tz)::time
         )
       END AS within_availability,
+      EXTRACT(EPOCH FROM (sh.ends_at - sh.starts_at)) / 3600 AS shift_hours,
+
+      -- Everything below is measured in the staff member's OWN timezone: a
+      -- "day" and a "week" are theirs, not the server's or the location's.
+      COALESCE((
+        SELECT SUM(EXTRACT(EPOCH FROM (a.ends_at - a.starts_at)) / 3600)
+        FROM assignments a
+        WHERE a.staff_id = st.id AND a.status = 'active'
+          AND (a.starts_at AT TIME ZONE st.availability_tz)::date
+            = (sh.starts_at AT TIME ZONE st.availability_tz)::date
+      ), 0) AS daily_hours,
+
+      COALESCE((
+        SELECT SUM(EXTRACT(EPOCH FROM (a.ends_at - a.starts_at)) / 3600)
+        FROM assignments a
+        WHERE a.staff_id = st.id AND a.status = 'active'
+          AND date_trunc('week', (a.starts_at AT TIME ZONE st.availability_tz))
+            = date_trunc('week', (sh.starts_at AT TIME ZONE st.availability_tz))
+      ), 0) AS weekly_hours,
+
+      -- Length of the run of consecutive worked days ending on this shift's
+      -- day, counting the shift itself. Walks backwards to the first gap.
+      COALESCE((
+        SELECT MIN(g.i) FROM generate_series(1, 8) g(i)
+        WHERE NOT EXISTS (
+          SELECT 1 FROM assignments a
+          WHERE a.staff_id = st.id AND a.status = 'active'
+            AND (a.starts_at AT TIME ZONE st.availability_tz)::date
+              = (sh.starts_at AT TIME ZONE st.availability_tz)::date - g.i
+        )
+      ), 8)::int AS consecutive_days,
+
       to_char(sh.starts_at AT TIME ZONE st.availability_tz, 'Dy')      AS weekday,
       to_char(sh.starts_at AT TIME ZONE st.availability_tz, 'HH24:MI') AS local_start,
       to_char(sh.ends_at   AT TIME ZONE st.availability_tz, 'HH24:MI') AS local_end
@@ -91,6 +127,12 @@ export async function loadEligibility(
       certifiedAtLocation: row.certified,
       withinAvailability: row.within_availability,
       localWindow: { weekday: row.weekday, start: row.local_start, end: row.local_end },
+      // Totals from the query already include this shift when the person is
+      // assigned; when they are not, add it to model the post-assignment state.
+      shiftHours: Number(row.shift_hours),
+      dailyHours: Number(row.daily_hours) + (row.already_assigned ? 0 : Number(row.shift_hours)),
+      weeklyHours: Number(row.weekly_hours) + (row.already_assigned ? 0 : Number(row.shift_hours)),
+      consecutiveDays: row.consecutive_days,
     },
   }))
 }

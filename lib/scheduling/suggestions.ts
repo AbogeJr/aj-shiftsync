@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm'
 import { db as defaultDb, type Db } from '@/lib/db'
 import { requireLocationAccess } from './access'
-import { evaluateEligibility } from './eligibility'
+import { evaluateCompliance, evaluateEligibility } from './eligibility'
 import { loadEligibility } from './eligibility-query'
 import { NotFoundError } from './errors'
 
@@ -12,6 +12,8 @@ export interface Candidate {
   /** Hours already assigned in the shift's week, for spreading work fairly. */
   assignedHoursThisWeek: number
   desiredWeeklyHours: number
+  /** Allowed, but the manager should see these before confirming. */
+  warnings: string[]
 }
 
 export interface BlockedCandidate {
@@ -82,6 +84,7 @@ export async function suggestCoverage(
         skills: context.staffSkills,
         assignedHoursThisWeek: stats.hours,
         desiredWeeklyHours: stats.desired,
+        warnings: evaluateCompliance(context).map((w) => w.message),
       })
     } else if (!violations.some((v) => v.code === 'already_assigned')) {
       blocked.push({
@@ -92,7 +95,10 @@ export async function suggestCoverage(
     }
   }
 
+  // Clean candidates first, then by how far below their desired hours they are,
+  // so the fair pick and the compliant pick are the same click.
   eligible.sort((a, b) => {
+    if (a.warnings.length !== b.warnings.length) return a.warnings.length - b.warnings.length
     const shortfall = (c: Candidate) => c.desiredWeeklyHours - c.assignedHoursThisWeek
     return shortfall(b) - shortfall(a)
   })
