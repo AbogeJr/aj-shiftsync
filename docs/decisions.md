@@ -124,11 +124,5 @@ instantly. See the README for what makes it unsuitable for production.
 
 # Known limitations
 
-- No UI beyond `/login` and the temporary `/debug/events` page.
-- `requireLocationAccess()` guards the event stream; other service functions
-  will need the same guard as mutations are added.
-- The conflict explanation is not built yet — `assign.ts` raises a typed
-  `ConflictError` with a `TODO(validator)` where the human-readable reason
-  belongs.
-- Swap, drop, clock-in/out, overrides, notification preferences and email
-  simulation exist in the schema but have no service layer yet.
+Maintained in the [README](../README.md#known-limitations), so there is one list
+rather than two that drift apart.

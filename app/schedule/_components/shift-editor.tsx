@@ -5,6 +5,7 @@ import * as Dialog from '@radix-ui/react-dialog'
 import { weekdayLabel } from '@/lib/format'
 import type { ScheduleShift } from '@/lib/scheduling/schedule'
 import { createShiftsAction, deleteShiftAction, updateShiftAction } from '../actions'
+import { useToast } from '@/components/ui/toast'
 
 export interface EditorTarget {
   mode: 'create' | 'edit'
@@ -33,6 +34,7 @@ export function ShiftEditor({
   const [skill, setSkill] = useState<string>('')
   const [headcount, setHeadcount] = useState(1)
   const [selectedDays, setSelectedDays] = useState<string[]>([])
+  const toast = useToast()
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
@@ -62,8 +64,14 @@ export function ShiftEditor({
       const result = editing
         ? await updateShiftAction(editing.id, editing.version, draft)
         : await createShiftsAction(locationId, selectedDays, draft)
-      if (result.ok) onOpenChange(false)
-      else setError(result.error ?? 'Could not save')
+      if (result.ok) {
+        toast.success(
+          editing ? 'Shift updated.' : `${selectedDays.length} shift${selectedDays.length === 1 ? '' : 's'} added.`,
+        )
+        onOpenChange(false)
+      } else {
+        setError(result.error ?? 'Could not save')
+      }
     })
   }
 
@@ -72,8 +80,12 @@ export function ShiftEditor({
     setError(null)
     startTransition(async () => {
       const result = await deleteShiftAction(editing.id, editing.version)
-      if (result.ok) onOpenChange(false)
-      else setError(result.error ?? 'Could not delete')
+      if (result.ok) {
+        toast.success('Shift deleted.')
+        onOpenChange(false)
+      } else {
+        setError(result.error ?? 'Could not delete')
+      }
     })
   }
 

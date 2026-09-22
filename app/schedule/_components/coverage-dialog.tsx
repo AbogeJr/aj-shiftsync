@@ -6,6 +6,7 @@ import { timeLabel } from '@/lib/format'
 import type { CoverageSuggestions } from '@/lib/scheduling/suggestions'
 import type { ScheduleShift } from '@/lib/scheduling/schedule'
 import { assignAction, suggestCoverageAction } from '../actions'
+import { useToast } from '@/components/ui/toast'
 
 export function CoverageDialog({
   shift,
@@ -15,6 +16,7 @@ export function CoverageDialog({
   onOpenChange: (open: boolean) => void
 }) {
   const [data, setData] = useState<CoverageSuggestions | null>(null)
+  const toast = useToast()
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
@@ -43,8 +45,13 @@ export function CoverageDialog({
     setError(null)
     startTransition(async () => {
       const result = await assignAction(shift!.id, staffId)
-      if (result.ok) onOpenChange(false)
-      else setError(result.error ?? 'Could not assign')
+      if (result.ok) {
+        toast.success('Coverage assigned.')
+        onOpenChange(false)
+      } else {
+        setError(result.error ?? 'Could not assign')
+        toast.error('Could not assign — see the dialog for why.')
+      }
     })
   }
 

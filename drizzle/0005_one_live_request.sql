@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "swap_requests_one_live_per_assignment" ON "swap_requests" USING btree ("assignment_id") WHERE "swap_requests"."status" IN ('open', 'peer_accepted');

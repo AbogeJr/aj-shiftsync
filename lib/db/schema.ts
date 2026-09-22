@@ -290,9 +290,18 @@ export const swapRequests = pgTable(
     index('swap_requests_assignment_idx').on(t.assignmentId, t.status),
     // Supports the "no more than 3 pending per staff member" rule.
     index('swap_requests_requester_open_idx').on(t.requestedBy, t.status),
-    // A swap trades two named assignments between two named people. A drop is
-    // offered to nobody in particular and expires. One constraint, so a row
-    // cannot be half of each.
+    // One live request per assignment. A partial unique index rather than an
+    // application check, so two rapid clicks cannot both get through.
+    uniqueIndex('swap_requests_one_live_per_assignment')
+      .on(t.assignmentId)
+      .where(sql`${t.status} IN ('open', 'peer_accepted')`),
+    // A swap trades two named assignments between two named people and never
+    // expires. A drop trades nothing and always expires. One constraint, so a
+    // row cannot be half of each.
+    //
+    // `requested_to` is deliberately unconstrained for a drop: it is null while
+    // the drop is unclaimed and names the claimant afterwards. Requiring null
+    // would describe only the moment of creation, not the row's lifetime.
     check(
       'swap_requests_shape',
       sql`(
@@ -302,7 +311,6 @@ export const swapRequests = pgTable(
         AND ${t.expiresAt} IS NULL
       ) OR (
         ${t.kind} = 'drop'
-        AND ${t.requestedTo} IS NULL
         AND ${t.targetAssignmentId} IS NULL
         AND ${t.expiresAt} IS NOT NULL
       )`,

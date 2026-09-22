@@ -145,6 +145,16 @@ export async function updateShift(
         SET starts_at = ${updated.rows[0].starts_at}, ends_at = ${updated.rows[0].ends_at}
         WHERE shift_id = ${input.shiftId} AND status = 'active'
       `)
+
+      // Brief §3: a pending swap or drop describes a shift that no longer
+      // exists in the form it was agreed on, so it is withdrawn rather than
+      // silently applied to different hours.
+      await tx.execute(sql`
+        UPDATE swap_requests SET status = 'cancelled', resolved_at = now()
+        WHERE status IN ('open', 'peer_accepted')
+          AND (assignment_id IN (SELECT id FROM assignments WHERE shift_id = ${input.shiftId})
+            OR target_assignment_id IN (SELECT id FROM assignments WHERE shift_id = ${input.shiftId}))
+      `)
     })
   } catch (err) {
     if (isExclusionViolation(err, NO_OVERLAP_OR_SHORT_REST)) {

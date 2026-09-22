@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { assignAction } from '../actions'
+import { useToast } from '@/components/ui/toast'
 import type { ScheduleShift, ScheduleStaff } from '@/lib/scheduling/schedule'
 import { longDateLabel, timeLabel } from '@/lib/format'
 
@@ -19,6 +20,7 @@ export function AssignDialog({
   day: string
   shifts: ScheduleShift[]
 }) {
+  const toast = useToast()
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
@@ -46,8 +48,15 @@ export function AssignDialog({
     setError(null)
     startTransition(async () => {
       const result = await assignAction(shiftId, member!.id)
-      if (result.ok) onOpenChange(false)
-      else setError(result.error ?? 'Could not assign')
+      if (result.ok) {
+        toast.success(`${member!.name} assigned.`)
+        onOpenChange(false)
+      } else {
+        // Kept inline as well: the reason is long and belongs next to the shift
+        // it refers to, not only in a toast that disappears.
+        setError(result.error ?? 'Could not assign')
+        toast.error('Could not assign — see the dialog for why.')
+      }
     })
   }
 

@@ -17,6 +17,7 @@ import {
   type ScheduleFilters,
 } from '@/lib/scheduling/week-view'
 import { publishWeekAction, unassignAction } from '../actions'
+import { useToast } from '@/components/ui/toast'
 import { AssignDialog } from './assign-dialog'
 import { CoverageDialog } from './coverage-dialog'
 import { ShiftEditor, type EditorTarget } from './shift-editor'
@@ -53,6 +54,7 @@ export function ScheduleView({
   const [editorTarget, setEditorTarget] = useState<EditorTarget | null>(null)
   const [publishing, startPublish] = useTransition()
   const live = useLiveSchedule(location.id)
+  const toast = useToast()
 
   const visibleShifts = filterShifts(shifts, filters)
   const visibleStaff = filterStaff(staff, filters.search)
@@ -101,8 +103,10 @@ export function ScheduleView({
           onNavigate={(week) => navigate({ week })}
           onPublish={() =>
             startPublish(async () => {
-              await publishWeekAction(location.id, weekStart)
-              router.refresh()
+              const result = await publishWeekAction(location.id, weekStart)
+              if (toast.report(result, `Published ${unpublished} shift${unpublished === 1 ? '' : 's'}.`)) {
+                router.refresh()
+              }
             })
           }
         />
@@ -119,8 +123,8 @@ export function ScheduleView({
           onEditShift={(shift) => setEditorTarget({ mode: 'edit', day: shift.localDate, shift })}
           onUnassign={(assignmentId) =>
             startPublish(async () => {
-              await unassignAction(assignmentId)
-              router.refresh()
+              const result = await unassignAction(assignmentId)
+              if (toast.report(result, 'Removed from shift.')) router.refresh()
             })
           }
           onCreateOpenShift={(day) => setEditorTarget({ mode: 'create', day })}

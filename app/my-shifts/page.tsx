@@ -7,6 +7,7 @@ import { myWeek, openShiftsForMe } from '@/lib/scheduling/staff-view'
 import { hours as fmtHours, longDateLabel, timeLabel, weekRangeLabel } from '@/lib/format'
 import { skillStyle } from '@/components/ui/skill-style'
 import { ClaimButton } from './_components/claim-button'
+import { OfferUp } from './_components/offer-up'
 
 export const dynamic = 'force-dynamic'
 
@@ -73,6 +74,7 @@ export default async function MyShiftsPage() {
                   <span className="w-14 text-right text-xs tabular text-slate-500">
                     {fmtHours(shift.hours)}h
                   </span>
+                  <OfferUp assignmentId={shift.assignmentId} pendingRequest={shift.pendingRequest} />
                 </li>
               ))}
             </ul>

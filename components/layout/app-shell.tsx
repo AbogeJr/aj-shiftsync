@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from 'react'
 import { Close, Menu } from '@/components/icons'
 import { SidebarNav } from './sidebar'
+import { ToastProvider } from '@/components/ui/toast'
 
 /**
  * Application chrome shared by every screen.
@@ -15,6 +16,7 @@ export function AppShell({ role, children }: { role: string; children: ReactNode
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   return (
+    <ToastProvider>
     <div className="flex h-dvh bg-slate-50">
       {/* desktop rail */}
       <nav className="hidden w-20 shrink-0 flex-col gap-1 bg-slate-900 p-2 lg:flex">
@@ -63,5 +65,6 @@ export function AppShell({ role, children }: { role: string; children: ReactNode
         {children}
       </div>
     </div>
+    </ToastProvider>
   )
 }

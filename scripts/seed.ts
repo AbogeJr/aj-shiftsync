@@ -57,18 +57,18 @@ function localInstant(date: string, time: string, tz: string) {
 
 const PEOPLE = [
   // name, role, tz, desired hrs, rate (cents), skills, certified at
-  ['Avery Admin', 'admin', 'America/Los_Angeles', 0, 6000, [], ['mission', 'santa', 'village', 'backbay']],
-  ['Morgan Manager', 'manager', 'America/Los_Angeles', 40, 4200, ['server'], ['mission', 'santa']],
-  ['Sam Staff', 'staff', 'America/Los_Angeles', 32, 2100, ['server', 'host'], ['mission']],
-  ['Rosa Alvarez', 'staff', 'America/Los_Angeles', 40, 2600, ['line cook'], ['mission', 'santa']],
-  ['Dev Patel', 'staff', 'America/Los_Angeles', 24, 2400, ['bartender', 'server'], ['santa']],
-  ['Kim Nguyen', 'staff', 'America/Los_Angeles', 40, 2300, ['server'], ['mission', 'santa']],
-  ['Theo Brooks', 'staff', 'America/New_York', 36, 2500, ['line cook', 'server'], ['village', 'backbay']],
-  ['Nina Okafor', 'staff', 'America/New_York', 40, 2700, ['bartender'], ['village']],
-  ['Priya Shah', 'staff', 'America/New_York', 20, 2200, ['host', 'server'], ['backbay']],
-  ['Marco Rossi', 'manager', 'America/New_York', 40, 4400, ['line cook'], ['village', 'backbay']],
+  ['Michael Scott', 'admin', 'America/Los_Angeles', 0, 6000, [], ['mission', 'santa', 'village', 'backbay']],
+  ['Pam Beesly', 'manager', 'America/Los_Angeles', 40, 4200, ['server'], ['mission', 'santa']],
+  ['Jim Halpert', 'staff', 'America/Los_Angeles', 32, 2100, ['server', 'host'], ['mission']],
+  ['Dwight Schrute', 'staff', 'America/Los_Angeles', 40, 2600, ['line cook'], ['mission', 'santa']],
+  ['Kevin Malone', 'staff', 'America/Los_Angeles', 24, 2400, ['bartender', 'server'], ['santa']],
+  ['Angela Martin', 'staff', 'America/Los_Angeles', 40, 2300, ['server'], ['mission', 'santa']],
+  ['Stanley Hudson', 'staff', 'America/New_York', 36, 2500, ['line cook', 'server'], ['village', 'backbay']],
+  ['Phyllis Vance', 'staff', 'America/New_York', 40, 2700, ['bartender'], ['village']],
+  ['Kelly Kapoor', 'staff', 'America/New_York', 20, 2200, ['host', 'server'], ['backbay']],
+  ['Andy Bernard', 'manager', 'America/New_York', 40, 4400, ['line cook'], ['village', 'backbay']],
   // Certified in BOTH timezones - the brief's "Timezone Tangle" scenario.
-  ['Jordan Cross', 'staff', 'America/Los_Angeles', 38, 2800, ['server', 'bartender'], ['santa', 'village']],
+  ['Oscar Martinez', 'staff', 'America/Los_Angeles', 38, 2800, ['server', 'bartender'], ['santa', 'village']],
 ] as const
 
 async function main() {
@@ -131,11 +131,11 @@ async function main() {
 
   await db.insert(managerLocations).values([
     ...['mission', 'santa'].map((k) => ({
-      staffId: staffId.get('Morgan Manager')!,
+      staffId: staffId.get('Pam Beesly')!,
       locationId: locId.get(k)!,
     })),
     ...['village', 'backbay'].map((k) => ({
-      staffId: staffId.get('Marco Rossi')!,
+      staffId: staffId.get('Andy Bernard')!,
       locationId: locId.get(k)!,
     })),
   ])
@@ -192,18 +192,18 @@ async function main() {
 
   // Fill a few shifts. Times are copied from the shift, as assign.ts does.
   const fills: Array<[number, string]> = [
-    [0, 'Sam Staff'],
-    [0, 'Kim Nguyen'],
-    [1, 'Rosa Alvarez'],
-    [2, 'Kim Nguyen'],
-    [6, 'Dev Patel'],
-    // Jordan works BOTH a Pacific and an Eastern location in the same week:
+    [0, 'Jim Halpert'],
+    [0, 'Angela Martin'],
+    [1, 'Dwight Schrute'],
+    [2, 'Angela Martin'],
+    [6, 'Kevin Malone'],
+    // Oscar works BOTH a Pacific and an Eastern location in the same week:
     // the brief's Timezone Tangle, and what cross-location load looks like.
-    [7, 'Jordan Cross'],
-    [11, 'Jordan Cross'],
-    [9, 'Theo Brooks'],
-    [10, 'Nina Okafor'],
-    [12, 'Priya Shah'],
+    [7, 'Oscar Martinez'],
+    [11, 'Oscar Martinez'],
+    [9, 'Stanley Hudson'],
+    [10, 'Phyllis Vance'],
+    [12, 'Kelly Kapoor'],
   ]
   await db.insert(assignments).values(
     fills.map(([shiftIndex, name]) => ({

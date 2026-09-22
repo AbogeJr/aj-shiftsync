@@ -56,3 +56,8 @@ export const Close = ({ className }: P) => (
 export const Clock = ({ className }: P) => (
   <svg {...stroke} className={className}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
 )
+export const Swap = ({ className }: P) => (
+  <svg {...stroke} className={className}>
+    <path d="M4 7h13l-3-3M20 17H7l3 3" />
+  </svg>
+)

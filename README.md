@@ -4,9 +4,50 @@ Multi-location restaurant staff scheduling. Next.js (App Router) + TypeScript,
 Drizzle ORM on Postgres, deployed to Railway as a single long-running Node
 service with a Railway Postgres database.
 
-This repository is the foundation: schema, the scheduling invariant, the
-real-time transport, and the deployment surface. There is deliberately no UI
-beyond a temporary debug page.
+Managers build and publish schedules across four locations in two timezones;
+staff see their own week and pick up open shifts. The scheduling rules are
+enforced by the database and the service layer rather than by the UI, so they
+hold under concurrent writes.
+
+## Signing in
+
+Demo sign-in with no passwords — three seeded accounts, one click each.
+See [Authentication](#authentication) for why this is not production auth.
+
+| Role | Sees |
+| --- | --- |
+| **Admin** | Every location |
+| **Manager** | Only locations they are assigned to (Mission Bay & Santa Monica) |
+| **Staff** | Only their own shifts, and open shifts they can pick up |
+
+Accounts come from `npm run seed`: `admin@shiftsync.test`,
+`manager@shiftsync.test`, `staff@shiftsync.test`.
+
+## Screens
+
+| Route | Role | What it does |
+| --- | --- | --- |
+| `/overview` | admin, manager | Every location for the week: unfilled slots, hours, projected wages, publish state |
+| `/schedule` | admin, manager | The week grid. Create, edit, delete and publish shifts; assign and unassign; click an open shift to see who can cover it |
+| `/team` | admin, manager | Everyone, with hours **split by location** — how cross-location over-booking becomes visible |
+| `/reports` | admin, manager | Overtime exposure, hours against stated preference, premium Friday/Saturday-evening distribution |
+| `/my-shifts` | all | Your published shifts, plus open shifts you are eligible to pick up |
+| `/debug/events` | any | Temporary SSE harness. Delete before shipping |
+
+## What the system enforces
+
+Refused at the service layer or by a database constraint — never only in the UI:
+
+- **No double-booking**, and **at least 10 hours between shifts**, by one Postgres
+  exclusion constraint that holds under concurrent writers
+- **Headcount** — serialised with a row lock, so two managers cannot both take
+  the last seat
+- **Required skill**, **location certification** and **availability window**,
+  each reported with a reason a manager can act on
+- **Publication** — a draft schedule is invisible to staff and cannot be
+  picked up
+- **Optimistic locking** on shift edits, so a second manager's edit is refused
+  rather than silently overwriting the first
 
 ---
 
@@ -151,25 +192,28 @@ translate input and responses and nothing else.
 ## Layout
 
 ```
-app/api/health/route.ts              SELECT 1 -> 200 / 503
-app/api/events/[locationId]/route.ts SSE stream, filtered by location
-app/debug/events/page.tsx            TEMPORARY - delete before shipping
-lib/db/schema.ts                     Drizzle schema
-lib/env.ts                           Env access + .env fallback
-lib/realtime/bus.ts                  In-process EventEmitter + event contract
-lib/scheduling/assign.ts             Assignment service function
-lib/scheduling/errors.ts             ConflictError, NotFoundError
-lib/auth.ts                          Signed-cookie sessions + requireRole
-lib/scheduling/access.ts             Location authorization guard
-app/login/                           Demo one-click sign-in
-drizzle/0001_*.sql                   The exclusion constraint
+app/
+  overview/ schedule/ team/ reports/ my-shifts/   screens (page + layout + actions)
+  schedule/_components/                            grid, toolbar, dialogs, live-update hook
+  api/events/[locationId]/  api/health/            SSE stream · healthcheck
+  login/                                           demo sign-in
+components/
+  ui/           button · modal · feedback (Alert, Badge, Card, EmptyState, PageHeader)
+  layout/       app-shell · sidebar · nav-items · shell-layout · protected-page
+  icons.tsx     inline SVGs, so no icon-library dependency
+lib/
+  auth.ts       signed-cookie sessions, requireRole
+  format.ts     time, date and money formatting
+  db/           drizzle client and schema
+  realtime/     in-process event bus
+  scheduling/   access · assign · eligibility · shifts · schedule · suggestions
+                insights · week-view · errors
+drizzle/        migrations; 0001 holds the exclusion constraint
 ```
 
-Business logic is plain functions under `lib/scheduling/`. Route handlers and
-server actions call into them and do nothing else.
-
-Design decisions and assumptions: [docs/decisions.md](docs/decisions.md).
-Data model: [docs/schema.md](docs/schema.md).
+Business logic lives in `lib/scheduling/*` as plain functions. Route handlers and
+server actions translate input and responses and nothing else; authorization sits
+in the service layer so a second caller cannot skip it.
 
 ## Scripts
 
@@ -256,20 +300,36 @@ No Dockerfile, and `output: 'standalone'` is deliberately not used. Beyond the
 brief asking for it, standalone would strip the source tree that
 `npm run migrate` needs at pre-deploy time.
 
-## Known gaps
+## Known limitations
 
-- Swap, drop, clock-in/out, compliance overrides, notification preferences and
-  email simulation exist in the schema but have no service layer yet.
-- `requireLocationAccess()` guards the event stream. Mutations will need the
-  same guard in `lib/scheduling/*` as they are added.
-- `lib/scheduling/assign.ts` has a `TODO(validator)` in the conflict path where
-  the pure validator will produce the human-readable explanation.
-- `npm audit` reports a moderate advisory (GHSA-67mh-4wv8-2f99) against
-  `esbuild`, reachable only through `drizzle-kit`. Because `drizzle-kit` is a
-  production dependency here (it runs the pre-deploy migration), this now shows
-  up in `npm audit --omit=dev` too. The advisory concerns esbuild's *dev
-  server*, which nothing in this project ever starts — `drizzle-kit` uses
-  esbuild only to bundle `drizzle.config.ts`. The one non-breaking fix is
-  `drizzle-kit@0.18.1`, which predates the migration commands this project
-  relies on. Left alone deliberately; worth revisiting if `drizzle-kit` ships a
-  patched bundler.
+- **Swap and drop are not built.** The schema supports them (`kind`,
+  `target_assignment_id`, `expires_at`, peer-then-manager approval states, and a
+  CHECK enforcing swap-XOR-drop) but there is no service layer or UI. Staff can
+  pick up open shifts; they cannot hand one back.
+- **Overtime rules are reported, not enforced.** `/reports` flags anyone at 35
+  hours or more and marks past 40, but nothing blocks a daily 8/12-hour breach
+  or a 6th/7th consecutive day. `compliance_overrides` exists for the documented
+  manager override and is unused.
+- **Staff cannot edit their own availability.** Availability is seeded and
+  enforced, but there is no screen for it.
+- **Clock in/out is schema only** — `assignments.clocked_in_at/clocked_out_at`
+  exist, so an "on duty now" board has somewhere to read from, but it is not
+  built.
+- **Notifications are not delivered.** The table exists; nothing writes to it,
+  and notification preferences and email simulation are schema only.
+- **`authorizeAssignment` has no automated test.** It reads the session from
+  request context, which vitest cannot provide; it was verified by hand over
+  HTTP. The eligibility rules beneath it are unit-tested.
+- **One instance only.** Real-time fan-out is in-process, so `numReplicas` is
+  pinned to 1. Scaling out means moving `lib/realtime/bus.ts` back to Postgres
+  `LISTEN`/`NOTIFY`.
+
+## Dependency note
+
+`npm audit` reports a moderate advisory (GHSA-67mh-4wv8-2f99) against `esbuild`,
+reachable only through `drizzle-kit`. Because `drizzle-kit` is a production
+dependency here — it runs the pre-deploy migration — this shows up in
+`npm audit --omit=dev` too. The advisory concerns esbuild's *dev server*, which
+nothing in this project starts; `drizzle-kit` uses esbuild only to bundle
+`drizzle.config.ts`. The one non-breaking fix is `drizzle-kit@0.18.1`, which
+predates the migration commands this project relies on. Left alone deliberately.

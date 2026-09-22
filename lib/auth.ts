@@ -24,9 +24,9 @@ export interface SessionPayload {
 
 /** Seeded one-click accounts. Shared by the seed script and the login action. */
 export const DEMO_ACCOUNTS: ReadonlyArray<{ role: Role; email: string; name: string }> = [
-  { role: 'admin', email: 'admin@shiftsync.test', name: 'Avery Admin' },
-  { role: 'manager', email: 'manager@shiftsync.test', name: 'Morgan Manager' },
-  { role: 'staff', email: 'staff@shiftsync.test', name: 'Sam Staff' },
+  { role: 'admin', email: 'admin@shiftsync.test', name: 'Michael Scott' },
+  { role: 'manager', email: 'manager@shiftsync.test', name: 'Pam Beesly' },
+  { role: 'staff', email: 'staff@shiftsync.test', name: 'Jim Halpert' },
 ]
 
 export class UnauthorizedError extends Error {

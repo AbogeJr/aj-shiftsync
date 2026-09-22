@@ -65,6 +65,15 @@ export class CutoffError extends Error {
   }
 }
 
+/** A swap or drop rule refused the request. */
+export class SwapError extends Error {
+  readonly name = 'SwapError'
+  readonly code = 'SWAP_REFUSED' as const
+  constructor(message: string) {
+    super(message)
+  }
+}
+
 export class NotFoundError extends Error {
   readonly name = 'NotFoundError'
   readonly code = 'NOT_FOUND' as const

@@ -29,6 +29,20 @@
       "when": 1790143295671,
       "tag": "0003_staff_hourly_rate",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790150777882,
+      "tag": "0004_drop_claimant",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790152806040,
+      "tag": "0005_one_live_request",
+      "breakpoints": true
     }
   ]
 }

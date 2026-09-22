@@ -15,6 +15,8 @@ export interface MyShift {
   overnight: boolean
   requiredSkill: string | null
   hours: number
+  /** A live swap or drop against this assignment, if any. */
+  pendingRequest: { id: string; kind: 'swap' | 'drop'; status: string } | null
 }
 
 export interface OpenShift {
@@ -62,8 +64,12 @@ export async function myWeek(weekStart: string, db: Db = defaultDb): Promise<MyW
     overnight: boolean
     required_skill: string | null
     hours: string
+    request_id: string | null
+    request_kind: 'swap' | 'drop' | null
+    request_status: string | null
   }>(sql`
     SELECT st.name, st.desired_weekly_hours AS desired,
+           r.id AS request_id, r.kind::text AS request_kind, r.status::text AS request_status,
            sh.id, a.id AS assignment_id, l.name AS location, l.timezone,
            to_char(sh.starts_at AT TIME ZONE l.timezone, 'YYYY-MM-DD') AS local_date,
            to_char(sh.starts_at AT TIME ZONE l.timezone, 'HH24:MI')    AS start_local,
@@ -74,6 +80,8 @@ export async function myWeek(weekStart: string, db: Db = defaultDb): Promise<MyW
     FROM staff st
     LEFT JOIN assignments a ON a.staff_id = st.id AND a.status = 'active'
     LEFT JOIN shifts sh ON sh.id = a.shift_id AND sh.published_at IS NOT NULL
+    LEFT JOIN swap_requests r
+      ON r.assignment_id = a.id AND r.status IN ('open', 'peer_accepted')
     LEFT JOIN locations l ON l.id = sh.location_id
       AND sh.starts_at >= (${weekStart} || ' 00:00')::timestamp AT TIME ZONE l.timezone
       AND sh.starts_at <  ((${weekStart}::date + 7) || ' 00:00')::timestamp AT TIME ZONE l.timezone
@@ -95,6 +103,9 @@ export async function myWeek(weekStart: string, db: Db = defaultDb): Promise<MyW
       overnight: r.overnight,
       requiredSkill: r.required_skill,
       hours: Number(r.hours),
+      pendingRequest: r.request_id
+        ? { id: r.request_id, kind: r.request_kind!, status: r.request_status! }
+        : null,
     }))
 
   return {
