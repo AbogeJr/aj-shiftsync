@@ -11,6 +11,56 @@ import { LocationAccessError } from './errors'
  * Admins see everything. Managers see only locations they are assigned to.
  * Staff are not granted location-wide visibility.
  */
+/**
+ * Who is performing a write. Defaults to 'session' everywhere, so forgetting
+ * the argument gets you the authorized path - seeds and tests must opt out
+ * explicitly rather than authorization being opt-in.
+ */
+export type Actor = { kind: 'session' } | { kind: 'system'; staffId?: string | null }
+
+export const SESSION_ACTOR: Actor = { kind: 'session' }
+
+/**
+ * Who may put `staffId` on this shift.
+ *
+ * Managers and admins schedule anyone at locations they run. A staff member may
+ * only claim an *open, published* shift for themselves - that is the brief's
+ * "pick up available shifts they're qualified for". Publication is the gate:
+ * a draft schedule is not visible to staff, so it cannot be claimed either.
+ *
+ * Eligibility (skill, certification, availability, headcount) is checked
+ * separately by evaluateEligibility - this decides only who may ask.
+ */
+export async function authorizeAssignment(
+  shift: { locationId: string; published: boolean },
+  staffId: string,
+  db: Db = defaultDb,
+): Promise<SessionPayload> {
+  const session = await requireRole('admin', 'manager', 'staff')
+
+  if (session.role !== 'staff') {
+    return requireLocationAccess(shift.locationId, db)
+  }
+
+  if (session.userId !== staffId) {
+    throw new LocationAccessError(shift.locationId)
+  }
+  if (!shift.published) {
+    throw new LocationAccessError(shift.locationId)
+  }
+  return session
+}
+
+/** Authorize unless the caller is trusted system code (seeds, tests, jobs). */
+export async function authorizeLocation(
+  locationId: string,
+  actor: Actor,
+  db: Db = defaultDb,
+): Promise<SessionPayload | null> {
+  if (actor.kind === 'system') return null
+  return requireLocationAccess(locationId, db)
+}
+
 export async function requireLocationAccess(
   locationId: string,
   db: Db = defaultDb,

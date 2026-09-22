@@ -35,6 +35,36 @@ export class LocationAccessError extends Error {
   }
 }
 
+/** One or more eligibility rules rejected the assignment. */
+export class EligibilityError extends Error {
+  readonly name = 'EligibilityError'
+  readonly code = 'NOT_ELIGIBLE' as const
+  readonly violations: ReadonlyArray<{ code: string; message: string }>
+
+  constructor(violations: ReadonlyArray<{ code: string; message: string }>) {
+    super(violations.map((v) => v.message).join(' '))
+    this.violations = violations
+  }
+}
+
+/** Someone else changed the shift since it was loaded. */
+export class ConcurrentEditError extends Error {
+  readonly name = 'ConcurrentEditError'
+  readonly code = 'STALE_VERSION' as const
+  constructor() {
+    super('This shift was changed by someone else. Reload and try again.')
+  }
+}
+
+/** The schedule has locked for this shift. */
+export class CutoffError extends Error {
+  readonly name = 'CutoffError'
+  readonly code = 'PAST_CUTOFF' as const
+  constructor(hours: number) {
+    super(`Published shifts lock ${hours} hours before they start and can no longer be edited.`)
+  }
+}
+
 export class NotFoundError extends Error {
   readonly name = 'NotFoundError'
   readonly code = 'NOT_FOUND' as const
@@ -46,6 +76,14 @@ export class NotFoundError extends Error {
 
 /** Postgres SQLSTATE for exclusion_violation. */
 const PG_EXCLUSION_VIOLATION = '23P01'
+/** deadlock_detected and serialization_failure: retryable, not fatal. */
+const PG_DEADLOCK = '40P01'
+const PG_SERIALIZATION_FAILURE = '40001'
+
+export function isRetryableConcurrencyError(err: unknown): boolean {
+  const code = asPostgresError(err)?.code
+  return code === PG_DEADLOCK || code === PG_SERIALIZATION_FAILURE
+}
 
 interface PgErrorShape {
   code?: string

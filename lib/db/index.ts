@@ -26,3 +26,6 @@ export const pool: Pool = (globalForDb.__shiftsyncPool ??= createPool())
 export const db = drizzle(pool, { schema })
 
 export type Db = NodePgDatabase<typeof schema>
+
+/** The transaction handle drizzle passes to `db.transaction(...)` callbacks. */
+export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0]

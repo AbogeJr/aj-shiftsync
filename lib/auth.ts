@@ -1,7 +1,9 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { cookies } from 'next/headers'
+import { eq } from 'drizzle-orm'
 import { requireAuthSecret } from '@/lib/env'
-import { staffRole } from '@/lib/db/schema'
+import { db } from '@/lib/db'
+import { staff, staffRole } from '@/lib/db/schema'
 
 /**
  * Demo-scoped auth: a JSON payload plus an HMAC-SHA256 signature in an httpOnly
@@ -84,10 +86,26 @@ export async function getSession(): Promise<SessionPayload | null> {
 /**
  * Call from service functions in lib/scheduling/*, not from route handlers or
  * actions - a check in the caller only protects that one caller.
+ *
+ * The signed cookie proves the payload was not tampered with; it does not prove
+ * the account still exists or still has that role. A cookie outlives the row it
+ * names - after the account is deleted, or after the role changes - so the row
+ * is loaded and treated as the authority. Without this, a deleted account's
+ * session survives until expiry and fails late with a foreign-key error inside
+ * a transaction, and a demoted manager keeps manager access.
  */
 export async function requireRole(...allowed: Role[]): Promise<SessionPayload> {
   const session = await getSession()
   if (!session) throw new UnauthorizedError()
-  if (!allowed.includes(session.role)) throw new ForbiddenError(allowed, session.role)
-  return session
+
+  const [row] = await db
+    .select({ id: staff.id, role: staff.role })
+    .from(staff)
+    .where(eq(staff.id, session.userId))
+    .limit(1)
+
+  if (!row) throw new UnauthorizedError()
+  if (!allowed.includes(row.role)) throw new ForbiddenError(allowed, row.role)
+
+  return { userId: row.id, role: row.role }
 }

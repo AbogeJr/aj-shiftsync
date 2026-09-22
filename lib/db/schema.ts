@@ -79,6 +79,8 @@ export const staff = pgTable(
     email: text('email').notNull(),
     role: staffRole('role').notNull().default('staff'),
     desiredWeeklyHours: integer('desired_weekly_hours').notNull().default(0),
+    /** Integer cents, so labour cost arithmetic never touches floating point. */
+    hourlyRateCents: integer('hourly_rate_cents'),
     availabilityTz: text('availability_tz').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
@@ -89,6 +91,10 @@ export const staff = pgTable(
     check(
       'staff_desired_weekly_hours_sane',
       sql`${t.desiredWeeklyHours} >= 0 AND ${t.desiredWeeklyHours} <= 168`,
+    ),
+    check(
+      'staff_hourly_rate_non_negative',
+      sql`${t.hourlyRateCents} IS NULL OR ${t.hourlyRateCents} >= 0`,
     ),
   ],
 )

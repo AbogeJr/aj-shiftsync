@@ -1,0 +1,2 @@
+ALTER TABLE "staff" ADD COLUMN "hourly_rate_cents" integer;--> statement-breakpoint
+ALTER TABLE "staff" ADD CONSTRAINT "staff_hourly_rate_non_negative" CHECK ("staff"."hourly_rate_cents" IS NULL OR "staff"."hourly_rate_cents" >= 0);

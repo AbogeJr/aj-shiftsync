@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { and, eq, sql } from 'drizzle-orm'
 import { db, pool } from '@/lib/db'
-import { assignments, locations, shifts, staff } from '@/lib/db/schema'
+import { assignments, certifications, locations, shifts, staff } from '@/lib/db/schema'
 import { assignStaffToShift } from '@/lib/scheduling/assign'
-import { ConflictError } from '@/lib/scheduling/errors'
+import { ConflictError, EligibilityError } from '@/lib/scheduling/errors'
 
 // Integration test against a real Postgres. Nothing is mocked: the thing under
 // test IS the database constraint. Requires DATABASE_URL and `npm run migrate`.
@@ -58,6 +58,14 @@ beforeAll(async () => {
     })
     .returning({ id: staff.id })
   staffId = member.id
+
+  // Eligibility now requires certification at the location; without this the
+  // fixture is correctly rejected before the constraint is ever reached.
+  await db.insert(certifications).values({
+    staffId,
+    locationId,
+    effectiveFrom: new Date('2020-01-01T00:00:00Z'),
+  })
 })
 
 afterAll(async () => {
@@ -71,6 +79,61 @@ function randomSuffix() {
   return Math.random().toString(36).slice(2, 10)
 }
 
+describe('headcount under concurrency', () => {
+  it('never lets a shift exceed its headcount when two writers race', async () => {
+    await db.delete(assignments).where(eq(assignments.staffId, staffId))
+
+    // Two DIFFERENT people racing for the last seat on a headcount-1 shift, so
+    // the exclusion constraint is not what stops them - only the row lock is.
+    const [second] = await db
+      .insert(staff)
+      .values({
+        name: 'Second Fixture',
+        email: `fixture2-${randomSuffix()}@example.test`,
+        availabilityTz: 'America/Los_Angeles',
+      })
+      .returning({ id: staff.id })
+    await db.insert(certifications).values({
+      staffId: second.id,
+      locationId,
+      effectiveFrom: new Date('2020-01-01T00:00:00Z'),
+    })
+
+    const [shift] = await db
+      .insert(shifts)
+      .values({
+        locationId,
+        startsAt: new Date(BASE.getTime() + 200 * H),
+        endsAt: new Date(BASE.getTime() + 208 * H),
+        headcount: 1,
+      })
+      .returning({ id: shifts.id })
+
+    const results = await Promise.allSettled([
+      assignStaffToShift({ shiftId: shift.id, staffId, actor: { kind: 'system' } }),
+      assignStaffToShift({ shiftId: shift.id, staffId: second.id, actor: { kind: 'system' } }),
+    ])
+
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1)
+    const rejected = results.find((r) => r.status === 'rejected') as PromiseRejectedResult
+    expect(rejected.reason).toBeInstanceOf(EligibilityError)
+    expect((rejected.reason as EligibilityError).violations.map((v) => v.code)).toContain(
+      'shift_full',
+    )
+
+    const rows = await db
+      .select({ id: assignments.id })
+      .from(assignments)
+      .where(eq(assignments.shiftId, shift.id))
+    expect(rows).toHaveLength(1)
+
+    // This suite shares one staff fixture, so leave no assignments behind for
+    // the next test to count.
+    await db.delete(assignments).where(eq(assignments.shiftId, shift.id))
+    await db.delete(staff).where(eq(staff.id, second.id))
+  })
+})
+
 describe('no_overlap_or_short_rest under concurrency', () => {
   it('lets exactly one of two racing conflicting assignments through', async () => {
     // Two overlapping shifts, assigned concurrently on separate connections.
@@ -81,8 +144,8 @@ describe('no_overlap_or_short_rest under concurrency', () => {
     )
 
     const results = await Promise.allSettled([
-      assignStaffToShift({ shiftId: shiftA, staffId }),
-      assignStaffToShift({ shiftId: shiftB, staffId }),
+      assignStaffToShift({ shiftId: shiftA, staffId, actor: { kind: 'system' } }),
+      assignStaffToShift({ shiftId: shiftB, staffId, actor: { kind: 'system' } }),
     ])
 
     const fulfilled = results.filter((r) => r.status === 'fulfilled')
@@ -106,14 +169,14 @@ describe('no_overlap_or_short_rest under concurrency', () => {
     await db.delete(assignments).where(eq(assignments.staffId, staffId))
 
     const day1 = await createShift(BASE, new Date(BASE.getTime() + 8 * H))
-    await assignStaffToShift({ shiftId: day1, staffId })
+    await assignStaffToShift({ shiftId: day1, staffId, actor: { kind: 'system' } })
 
     // Starts 9h after day1 ends: legal overlap-wise, illegal rest-wise.
     const tooSoon = await createShift(
       new Date(BASE.getTime() + 17 * H),
       new Date(BASE.getTime() + 21 * H),
     )
-    await expect(assignStaffToShift({ shiftId: tooSoon, staffId })).rejects.toBeInstanceOf(
+    await expect(assignStaffToShift({ shiftId: tooSoon, staffId, actor: { kind: 'system' } })).rejects.toBeInstanceOf(
       ConflictError,
     )
 
@@ -123,7 +186,7 @@ describe('no_overlap_or_short_rest under concurrency', () => {
       new Date(BASE.getTime() + 22 * H),
     )
     await expect(
-      assignStaffToShift({ shiftId: exactlyTenHours, staffId }),
+      assignStaffToShift({ shiftId: exactlyTenHours, staffId, actor: { kind: 'system' } }),
     ).resolves.toMatchObject({ staffId, status: 'active' })
 
     expect(await countActive()).toBe(2)

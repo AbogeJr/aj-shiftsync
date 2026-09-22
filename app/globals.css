@@ -1,0 +1,31 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
+
+  /* Violet accent on cool neutral grey. */
+  --color-brand-50: #f5f3ff;
+  --color-brand-100: #ede9fe;
+  --color-brand-500: #7c3aed;
+  --color-brand-600: #6d28d9;
+  --color-brand-700: #5b21b6;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-white text-slate-900 antialiased;
+  font-family: var(--font-sans);
+}
+
+/*
+ * Figures in the grid are compared down a column - hours against hours, wages
+ * against wages - so they need to occupy equal width. Inter's proportional
+ * digits would make the columns ragged.
+ */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
