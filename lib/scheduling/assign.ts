@@ -121,15 +121,19 @@ export async function assignStaffToShift(
         })
       }
 
-      // Inside the transaction: a rolled-back assignment must not leave a
-      // notification claiming it happened.
-      await notify(tx, {
-        staffId,
-        type: 'shift.assigned',
-        title: 'You have a new shift',
-        body: `${shift.startsAt.toISOString()} — check My shifts for the details.`,
-        meta: { shiftId: shift.id, assignmentId: '' },
-      })
+      // Only for a published shift. A draft is invisible to staff by design, so
+      // telling them about it would announce a schedule they cannot see and
+      // that may still change. Publishing is what notifies them - see
+      // publishWeek in shifts.ts.
+      if (shift.publishedAt !== null) {
+        await notify(tx, {
+          staffId,
+          type: 'shift.assigned',
+          title: 'You have a new shift',
+          body: 'Check My shifts for the details.',
+          meta: { shiftId: shift.id },
+        })
+      }
 
       await tx.insert(auditLog).values({
         actorStaffId,

@@ -47,7 +47,7 @@ export async function loginAs(formData: FormData): Promise<void> {
     maxAge: 60 * 60 * 8,
   })
 
-  redirect(member.role === 'staff' ? '/my-shifts' : '/schedule')
+  redirect(member.role === 'staff' ? '/my-shifts' : '/overview')
 }
 
 export async function logout(): Promise<void> {

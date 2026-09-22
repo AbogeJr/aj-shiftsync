@@ -14,6 +14,9 @@ const TZ = 'America/New_York'
 
 const suffix = () => Math.random().toString(36).slice(2, 10)
 
+// Fixture shifts are dated in the future on purpose: a finished shift cannot be
+// staffed, so past dates would be refused before any of these rules is reached.
+
 async function shiftRow(id: string) {
   const r = await db.execute<{
     local_start: string
@@ -58,7 +61,7 @@ describe('shift CRUD', () => {
   it('creates one shift per selected day', async () => {
     const { created } = await createShifts({
       locationId,
-      dates: ['2026-06-01', '2026-06-02', '2026-06-03'],
+      dates: ['2027-06-01', '2027-06-02', '2027-06-03'],
       startLocal: '09:00',
       endLocal: '17:00',
       requiredSkill: null,
@@ -74,7 +77,7 @@ describe('shift CRUD', () => {
   it('treats an overnight shift as one shift ending the next local day', async () => {
     await createShifts({
       locationId,
-      dates: ['2026-06-10'],
+      dates: ['2027-06-10'],
       startLocal: '23:00',
       endLocal: '03:00',
       requiredSkill: null,
@@ -86,8 +89,8 @@ describe('shift CRUD', () => {
           AND to_char(starts_at AT TIME ZONE ${TZ}, 'HH24:MI') = '23:00'`,
     ).then((r) => r.rows)
     const s = await shiftRow(row.id)
-    expect(s.local_date).toBe('2026-06-10')
-    expect(s.end_date).toBe('2026-06-11')
+    expect(s.local_date).toBe('2027-06-10')
+    expect(s.end_date).toBe('2027-06-11')
     expect(s.local_start).toBe('23:00')
     expect(s.local_end).toBe('03:00')
   })
@@ -97,8 +100,8 @@ describe('shift CRUD', () => {
       .insert(shifts)
       .values({
         locationId,
-        startsAt: new Date('2026-07-01T13:00:00Z'),
-        endsAt: new Date('2026-07-01T21:00:00Z'),
+        startsAt: new Date('2027-07-01T13:00:00Z'),
+        endsAt: new Date('2027-07-01T21:00:00Z'),
         headcount: 1,
       })
       .returning({ id: shifts.id, version: shifts.version })
@@ -122,8 +125,8 @@ describe('shift CRUD', () => {
     // The denormalized copy must have followed, or the constraint reasons
     // about times that no longer exist.
     const [a] = await db.select().from(assignments).where(eq(assignments.shiftId, created.id))
-    expect(a.startsAt.toISOString()).toBe('2026-07-01T18:00:00.000Z')
-    expect(a.endsAt.toISOString()).toBe('2026-07-02T00:00:00.000Z')
+    expect(a.startsAt.toISOString()).toBe('2027-07-01T18:00:00.000Z')
+    expect(a.endsAt.toISOString()).toBe('2027-07-02T00:00:00.000Z')
   })
 
   it('refuses an edit made against a stale version', async () => {
@@ -131,8 +134,8 @@ describe('shift CRUD', () => {
       .insert(shifts)
       .values({
         locationId,
-        startsAt: new Date('2026-08-01T13:00:00Z'),
-        endsAt: new Date('2026-08-01T21:00:00Z'),
+        startsAt: new Date('2027-08-01T13:00:00Z'),
+        endsAt: new Date('2027-08-01T21:00:00Z'),
         headcount: 1,
       })
       .returning({ id: shifts.id, version: shifts.version })
@@ -158,8 +161,8 @@ describe('shift CRUD', () => {
       .insert(shifts)
       .values({
         locationId,
-        startsAt: new Date('2026-09-01T18:00:00Z'),
-        endsAt: new Date('2026-09-02T02:00:00Z'),
+        startsAt: new Date('2027-09-01T18:00:00Z'),
+        endsAt: new Date('2027-09-02T02:00:00Z'),
         headcount: 1,
       })
       .returning({ id: shifts.id, version: shifts.version })
@@ -168,8 +171,8 @@ describe('shift CRUD', () => {
       .insert(shifts)
       .values({
         locationId,
-        startsAt: new Date('2026-09-02T18:00:00Z'),
-        endsAt: new Date('2026-09-02T22:00:00Z'),
+        startsAt: new Date('2027-09-02T18:00:00Z'),
+        endsAt: new Date('2027-09-02T22:00:00Z'),
         headcount: 1,
       })
       .returning({ id: shifts.id, version: shifts.version })
@@ -200,8 +203,8 @@ describe('shift CRUD', () => {
       .insert(shifts)
       .values({
         locationId,
-        startsAt: new Date('2026-10-01T13:00:00Z'),
-        endsAt: new Date('2026-10-01T21:00:00Z'),
+        startsAt: new Date('2027-10-01T13:00:00Z'),
+        endsAt: new Date('2027-10-01T21:00:00Z'),
         headcount: 1,
       })
       .returning({ id: shifts.id })
@@ -226,8 +229,8 @@ describe('shift CRUD', () => {
       .insert(shifts)
       .values({
         locationId,
-        startsAt: new Date('2026-11-01T13:00:00Z'),
-        endsAt: new Date('2026-11-01T21:00:00Z'),
+        startsAt: new Date('2027-11-01T13:00:00Z'),
+        endsAt: new Date('2027-11-01T21:00:00Z'),
         headcount: 1,
       })
       .returning({ id: shifts.id, version: shifts.version })

@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm'
 import { db as defaultDb, type Db, type Tx } from '@/lib/db'
 import { requireRole } from '@/lib/auth'
+import { publishNotification } from '@/lib/realtime/bus'
 
 /**
  * Persisted notifications (brief §7).
@@ -60,6 +61,8 @@ export async function notify(executor: Db | Tx, input: NotifyInput): Promise<voi
       AND p.email_simulation_enabled
       AND NOT (p.muted_types ? ${input.type})
   `)
+
+  publishNotification({ staffId: input.staffId, title: input.title })
 }
 
 /** Notify several people about the same thing. */

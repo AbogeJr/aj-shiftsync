@@ -1,13 +1,9 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { and, eq, isNull, sql } from 'drizzle-orm'
-import { db } from '@/lib/db'
-import { shifts } from '@/lib/db/schema'
 import { assignStaffToShift } from '@/lib/scheduling/assign'
-import { requireLocationAccess } from '@/lib/scheduling/access'
 import { suggestCoverage, type CoverageSuggestions } from '@/lib/scheduling/suggestions'
-import { createShifts, deleteShift, unassign, updateShift } from '@/lib/scheduling/shifts'
+import { createShifts, deleteShift, publishWeek, unassign, updateShift } from '@/lib/scheduling/shifts'
 import type { ShiftDraft } from '@/lib/scheduling/shifts'
 import { ConflictError, EligibilityError } from '@/lib/scheduling/errors'
 import { ForbiddenError, UnauthorizedError } from '@/lib/auth'
@@ -43,22 +39,11 @@ export async function assignAction(shiftId: string, staffId: string): Promise<Ac
 export async function publishWeekAction(
   locationId: string,
   weekStart: string,
-): Promise<ActionResult> {
+): Promise<ActionResult & { published?: number }> {
   try {
-    await requireLocationAccess(locationId)
-    await db
-      .update(shifts)
-      .set({ publishedAt: sql`now()` })
-      .where(
-        and(
-          eq(shifts.locationId, locationId),
-          isNull(shifts.publishedAt),
-          sql`${shifts.startsAt} >= (${weekStart} || ' 00:00')::timestamp AT TIME ZONE (select timezone from locations where id = ${locationId})`,
-          sql`${shifts.startsAt} <  ((${weekStart}::date + 7) || ' 00:00')::timestamp AT TIME ZONE (select timezone from locations where id = ${locationId})`,
-        ),
-      )
+    const { published } = await publishWeek(locationId, weekStart)
     revalidatePath('/schedule')
-    return { ok: true }
+    return { ok: true, published }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : 'Could not publish' }
   }

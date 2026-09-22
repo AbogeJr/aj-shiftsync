@@ -12,9 +12,9 @@ const H = 60 * 60 * 1000
 let locationId: string
 let staffId: string
 
-// Clear of any DST transition - DST correctness is the availability layer's
-// problem, not this constraint's.
-const BASE = new Date('2026-06-02T09:00:00.000Z')
+// transitions - DST correctness is the availability layer's problem, not this
+// constraint's.
+const BASE = new Date('2027-06-02T09:00:00.000Z')
 
 async function createShift(startsAt: Date, endsAt: Date): Promise<string> {
   const [shift] = await db

@@ -28,7 +28,12 @@ export function ShiftBlock({
           ×
         </button>
       )}
-      <button onClick={onEdit} className="block w-full text-left" title="Edit shift">
+      <button
+        onClick={onEdit}
+        disabled={!onEdit}
+        className="block w-full text-left disabled:cursor-default"
+        title={onEdit ? 'Edit shift' : undefined}
+      >
       <div className="font-semibold tabular">
         {timeLabel(shift.startLocal)}–{timeLabel(shift.endLocal)}
         {shift.overnight && <span title="Ends the next day"> +1</span>}

@@ -21,6 +21,8 @@ const base: EligibilityContext = {
   dailyHours: 8,
   weeklyHours: 8,
   consecutiveDays: 1,
+  hasEnded: false,
+  hasStarted: false,
 }
 
 const codes = (ctx: Partial<EligibilityContext>) =>
@@ -55,6 +57,17 @@ describe('eligibility rules', () => {
     expect(codes({ withinAvailability: false })).toContain('outside_availability')
     // Null means no rules on file: unknown must not make someone unschedulable.
     expect(codes({ withinAvailability: null })).toEqual([])
+  })
+
+  it('refuses a shift that has already finished, and says only that', () => {
+    const violations = evaluateEligibility({ ...base, hasEnded: true, staffSkills: [] })
+    // One clear reason, not a pile of others that no longer matter.
+    expect(violations).toHaveLength(1)
+    expect(violations[0].code).toBe('shift_ended')
+  })
+
+  it('still allows an in-progress shift, because cover is often found late', () => {
+    expect(codes({ hasStarted: true, hasEnded: false })).toEqual([])
   })
 
   it('blocks past the daily hard limit, which no override can lift', () => {

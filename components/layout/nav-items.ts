@@ -8,7 +8,7 @@ export interface NavItem {
 
 const MANAGER_NAV: NavItem[] = [
   { href: '/overview', label: 'Overview', icon: Home },
-  { href: '/schedule', label: 'Shifts', icon: Calendar },
+  { href: '/schedule', label: 'Schedules', icon: Calendar },
   { href: '/team', label: 'Team', icon: Users },
   { href: '/on-duty', label: 'On duty', icon: Clock },
   { href: '/requests', label: 'Requests', icon: Swap },

@@ -23,6 +23,7 @@ import { CoverageDialog } from './coverage-dialog'
 import { ShiftEditor, type EditorTarget } from './shift-editor'
 import { LocationSwitcher } from './location-switcher'
 import { ScheduleGrid } from './schedule-grid'
+import { ScheduleList } from './schedule-list'
 import { ScheduleToolbar } from './schedule-toolbar'
 import { useLiveSchedule } from './use-live-schedule'
 
@@ -34,12 +35,14 @@ export function ScheduleView({
   schedule,
   locations,
   role,
+  canEdit,
   today,
   weekStart,
 }: {
   schedule: WeekSchedule
   locations: ScheduleLocation[]
   role: string
+  canEdit: boolean
   today: string
   weekStart: string
 }) {
@@ -53,6 +56,7 @@ export function ScheduleView({
   const [coverageShift, setCoverageShift] = useState<ScheduleShift | null>(null)
   const [editorTarget, setEditorTarget] = useState<EditorTarget | null>(null)
   const [publishing, startPublish] = useTransition()
+  const [view, setView] = useState<'calendar' | 'list'>('calendar')
   const live = useLiveSchedule(location.id)
   const toast = useToast()
 
@@ -99,6 +103,9 @@ export function ScheduleView({
           filters={filters}
           unpublished={unpublished}
           publishing={publishing}
+          canEdit={canEdit}
+          view={view}
+          onViewChange={setView}
           onFiltersChange={setFilters}
           onNavigate={(week) => navigate({ week })}
           onPublish={() =>
@@ -111,24 +118,37 @@ export function ScheduleView({
           }
         />
 
-        <ScheduleGrid
-          days={days}
-          today={today}
-          staff={visibleStaff}
-          shifts={visibleShifts}
-          search={filters.search}
-          onSearchChange={(search) => setFilters({ ...filters, search })}
-          onAddShift={(member, day) => setAssignTarget({ member, day })}
-          onFindCoverage={setCoverageShift}
-          onEditShift={(shift) => setEditorTarget({ mode: 'edit', day: shift.localDate, shift })}
-          onUnassign={(assignmentId) =>
-            startPublish(async () => {
-              const result = await unassignAction(assignmentId)
-              if (toast.report(result, 'Removed from shift.')) router.refresh()
-            })
-          }
-          onCreateOpenShift={(day) => setEditorTarget({ mode: 'create', day })}
-        />
+        {view === 'calendar' ? (
+          <ScheduleGrid
+            days={days}
+            today={today}
+            staff={visibleStaff}
+            shifts={visibleShifts}
+            search={filters.search}
+            canEdit={canEdit}
+            onSearchChange={(search) => setFilters({ ...filters, search })}
+            onAddShift={(member, day) => setAssignTarget({ member, day })}
+            onFindCoverage={setCoverageShift}
+            onEditShift={(shift) => setEditorTarget({ mode: 'edit', day: shift.localDate, shift })}
+            onUnassign={(assignmentId) =>
+              startPublish(async () => {
+                const result = await unassignAction(assignmentId)
+                if (toast.report(result, 'Removed from shift.')) router.refresh()
+              })
+            }
+            onCreateOpenShift={(day) => setEditorTarget({ mode: 'create', day })}
+          />
+        ) : (
+          <ScheduleList
+            days={days}
+            today={today}
+            staff={visibleStaff}
+            shifts={visibleShifts}
+            canEdit={canEdit}
+            onEditShift={(shift) => setEditorTarget({ mode: 'edit', day: shift.localDate, shift })}
+            onFindCoverage={setCoverageShift}
+          />
+        )}
       </div>
 
       <ShiftEditor

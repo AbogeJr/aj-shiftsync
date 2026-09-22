@@ -17,8 +17,6 @@ export default async function SchedulePage({
 }) {
   const session = await getSession()
   if (!session) redirect('/login')
-  if (session.role === 'staff') redirect('/login?error=managers-only')
-
   const params = await searchParams
 
   let locations
@@ -51,6 +49,7 @@ export default async function SchedulePage({
       schedule={schedule}
       locations={locations}
       role={session.role}
+      canEdit={session.role !== 'staff'}
       today={today}
       weekStart={week}
     />

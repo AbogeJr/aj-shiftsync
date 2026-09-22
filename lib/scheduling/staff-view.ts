@@ -165,6 +165,7 @@ export async function openShiftsForMe(
     FROM shifts sh
     JOIN locations l ON l.id = sh.location_id
     WHERE sh.published_at IS NOT NULL
+      AND sh.ends_at > now()
       AND sh.starts_at >= (${weekStart} || ' 00:00')::timestamp AT TIME ZONE l.timezone
       AND sh.starts_at <  ((${weekStart}::date + 7) || ' 00:00')::timestamp AT TIME ZONE l.timezone
       AND sh.headcount > (

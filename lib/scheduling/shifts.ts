@@ -289,3 +289,66 @@ export async function unassign(
     assignmentId,
   })
 }
+
+/**
+ * Publish every draft shift in a week.
+ *
+ * Publishing is the moment a schedule becomes real to staff, so this is where
+ * they are told about it - not when a manager first drafts the assignment. Each
+ * person gets one notification covering all their newly visible shifts rather
+ * than one per shift.
+ */
+export async function publishWeek(
+  locationId: string,
+  weekStart: string,
+  db: Db = defaultDb,
+  actor: Actor = SESSION_ACTOR,
+): Promise<{ published: number; notified: number }> {
+  await authorizeLocation(locationId, actor, db)
+  const tz = await locationTimezone(db, locationId)
+
+  let published = 0
+  let notified = 0
+
+  await db.transaction(async (tx) => {
+    const rows = await tx.execute<{ id: string }>(sql`
+      UPDATE shifts SET published_at = now()
+      WHERE location_id = ${locationId}
+        AND published_at IS NULL
+        AND starts_at >= (${weekStart}::text || ' 00:00')::timestamp AT TIME ZONE ${tz}::text
+        AND starts_at <  ((${weekStart}::date + 7)::text || ' 00:00')::timestamp AT TIME ZONE ${tz}::text
+      RETURNING id
+    `)
+    published = rows.rows.length
+    if (published === 0) return
+
+    const ids = rows.rows.map((r) => r.id)
+    const recipients = await tx.execute<{ staff_id: string; n: number }>(sql`
+      SELECT staff_id, count(*)::int AS n FROM assignments
+      WHERE status = 'active' AND shift_id = ANY(${sql.param(ids)}::uuid[])
+      GROUP BY staff_id
+    `)
+
+    for (const person of recipients.rows) {
+      await notify(tx, {
+        staffId: person.staff_id,
+        type: 'schedule.published',
+        title: 'Your schedule has been published',
+        body: `${person.n} shift${person.n === 1 ? '' : 's'} for the week of ${weekStart}.`,
+        meta: { locationId },
+      })
+      notified += 1
+    }
+
+    await recordAudit(tx, {
+      locationId,
+      entityType: 'schedule',
+      entityId: locationId,
+      action: 'schedule.published',
+      after: { weekStart, shifts: published },
+    })
+  })
+
+  publishScheduleChange({ locationId, type: 'shift.updated' })
+  return { published, notified }
+}

@@ -29,6 +29,7 @@ export function ScheduleGrid({
   onEditShift,
   onUnassign,
   onCreateOpenShift,
+  canEdit,
 }: {
   days: string[]
   today: string
@@ -41,6 +42,7 @@ export function ScheduleGrid({
   onEditShift: (shift: ScheduleShift) => void
   onUnassign: (assignmentId: string) => void
   onCreateOpenShift: (day: string) => void
+  canEdit: boolean
 }) {
   const byStaffDay = indexByStaffDay(shifts)
   const openByDay = openSlotsByDay(shifts)
@@ -89,6 +91,7 @@ export function ScheduleGrid({
               key={day}
               className="group/open relative space-y-1 border-r border-slate-200 p-1.5 last:border-r-0"
             >
+              {canEdit && (
               <button
                 onClick={() => onCreateOpenShift(day)}
                 aria-label={`Add a shift on ${day}`}
@@ -97,6 +100,7 @@ export function ScheduleGrid({
               >
                 +
               </button>
+              )}
               {(openByDay.get(day) ?? []).map(({ shift, open: slots }) => (
                 <OpenShiftBlock
                   key={shift.id}
@@ -144,11 +148,11 @@ export function ScheduleGrid({
                       <ShiftBlock
                         key={shift.id}
                         shift={shift}
-                        onEdit={() => onEditShift(shift)}
-                        onUnassign={() => onUnassign(shift.assignmentIds[member.id])}
+                        onEdit={canEdit ? () => onEditShift(shift) : undefined}
+                        onUnassign={canEdit ? () => onUnassign(shift.assignmentIds[member.id]) : undefined}
                       />
                     ))}
-                    {cellShifts.length === 0 && (
+                    {cellShifts.length === 0 && canEdit && (
                       <button
                         onClick={() => onAddShift(member, day)}
                         aria-label={`Assign ${member.name} on ${day}`}

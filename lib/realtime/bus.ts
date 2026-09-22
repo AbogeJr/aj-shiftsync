@@ -9,9 +9,18 @@ export interface ScheduleChangeEvent {
   at: string
 }
 
+/** Addressed to one person rather than a location. */
+export interface NotificationEvent {
+  staffId: string
+  title: string
+  at: string
+}
+
 type ScheduleChangeListener = (event: ScheduleChangeEvent) => void
+type NotificationListener = (event: NotificationEvent) => void
 
 const EVENT = 'schedule_change'
+const NOTIFICATION_EVENT = 'notification'
 
 // Fan-out is in-process, so subscribers must live in the emitting process: this
 // assumes a single instance. Scaling out means moving to Postgres LISTEN/NOTIFY,
@@ -45,5 +54,24 @@ export function subscribeToScheduleChanges(
   bus.on(EVENT, listener)
   return () => {
     bus.off(EVENT, listener)
+  }
+}
+
+/**
+ * Announce a notification.
+ *
+ * Deliberately a hint, not the payload: the client refetches its unread count
+ * and latest items. That means a hint emitted inside a transaction that later
+ * rolls back is harmless - the refetch simply finds nothing new - so this can
+ * be called from the same place the row is written.
+ */
+export function publishNotification(event: Omit<NotificationEvent, 'at'>): void {
+  bus.emit(NOTIFICATION_EVENT, { ...event, at: new Date().toISOString() })
+}
+
+export function subscribeToNotifications(listener: NotificationListener): () => void {
+  bus.on(NOTIFICATION_EVENT, listener)
+  return () => {
+    bus.off(NOTIFICATION_EVENT, listener)
   }
 }

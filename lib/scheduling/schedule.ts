@@ -2,7 +2,7 @@ import { asc, eq, sql } from 'drizzle-orm'
 import { db as defaultDb, type Db } from '@/lib/db'
 import { locations, managerLocations, staff } from '@/lib/db/schema'
 import { getSession, requireRole } from '@/lib/auth'
-import { requireLocationAccess } from './access'
+import { requireLocationVisibility } from './access'
 import { NotFoundError } from './errors'
 
 export interface ScheduleLocation {
@@ -49,21 +49,36 @@ export interface WeekSchedule {
   shifts: ScheduleShift[]
 }
 
-/** Locations the signed-in user may view, for the switcher. */
+/**
+ * Locations the signed-in user may view, for the switcher.
+ *
+ * Admins see everything, managers the locations they run, and staff the ones
+ * they are certified for - they can read a schedule they might be put on.
+ */
 export async function listAccessibleLocations(db: Db = defaultDb): Promise<ScheduleLocation[]> {
-  const session = await requireRole('admin', 'manager')
+  const session = await requireRole('admin', 'manager', 'staff')
   const columns = { id: locations.id, name: locations.name, timezone: locations.timezone }
 
   if (session.role === 'admin') {
     return db.select(columns).from(locations).orderBy(asc(locations.name))
   }
 
-  return db
-    .select(columns)
-    .from(locations)
-    .innerJoin(managerLocations, eq(managerLocations.locationId, locations.id))
-    .where(eq(managerLocations.staffId, session.userId))
-    .orderBy(asc(locations.name))
+  if (session.role === 'manager') {
+    return db
+      .select(columns)
+      .from(locations)
+      .innerJoin(managerLocations, eq(managerLocations.locationId, locations.id))
+      .where(eq(managerLocations.staffId, session.userId))
+      .orderBy(asc(locations.name))
+  }
+
+  const rows = await db.execute<{ id: string; name: string; timezone: string }>(sql`
+    SELECT DISTINCT l.id, l.name, l.timezone
+    FROM locations l JOIN certifications c ON c.location_id = l.id
+    WHERE c.staff_id = ${session.userId} AND (c.revoked_at IS NULL OR c.revoked_at > now())
+    ORDER BY l.name
+  `)
+  return rows.rows
 }
 
 /**
@@ -78,7 +93,9 @@ export async function getWeekSchedule(
   weekStart: string,
   db: Db = defaultDb,
 ): Promise<WeekSchedule> {
-  await requireLocationAccess(locationId, db)
+  const session = await requireLocationVisibility(locationId, db)
+  // Publishing is what makes a schedule visible, so staff never see drafts.
+  const publishedOnly = session.role === 'staff'
 
   const [location] = await db
     .select({ id: locations.id, name: locations.name, timezone: locations.timezone })
@@ -154,6 +171,7 @@ export async function getWeekSchedule(
     WHERE sh.location_id = ${locationId}
       AND sh.starts_at >= (${weekStart} || ' 00:00')::timestamp AT TIME ZONE ${tz}
       AND sh.starts_at <  ((${weekStart}::date + 7) || ' 00:00')::timestamp AT TIME ZONE ${tz}
+      AND (${publishedOnly} = false OR sh.published_at IS NOT NULL)
     ORDER BY sh.starts_at
   `)
 

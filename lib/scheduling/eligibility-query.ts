@@ -34,6 +34,8 @@ export async function loadEligibility(
     weekday: string
     local_start: string
     local_end: string
+    has_ended: boolean
+    has_started: boolean
     shift_hours: string
     daily_hours: string
     weekly_hours: string
@@ -72,6 +74,8 @@ export async function loadEligibility(
             AND e.end_local   > (sh.starts_at AT TIME ZONE st.availability_tz)::time
         )
       END AS within_availability,
+      sh.ends_at   <= now() AS has_ended,
+      sh.starts_at <= now() AS has_started,
       EXTRACT(EPOCH FROM (sh.ends_at - sh.starts_at)) / 3600 AS shift_hours,
 
       -- Everything below is measured in the staff member's OWN timezone: a
@@ -129,6 +133,8 @@ export async function loadEligibility(
       localWindow: { weekday: row.weekday, start: row.local_start, end: row.local_end },
       // Totals from the query already include this shift when the person is
       // assigned; when they are not, add it to model the post-assignment state.
+      hasEnded: row.has_ended,
+      hasStarted: row.has_started,
       shiftHours: Number(row.shift_hours),
       dailyHours: Number(row.daily_hours) + (row.already_assigned ? 0 : Number(row.shift_hours)),
       weeklyHours: Number(row.weekly_hours) + (row.already_assigned ? 0 : Number(row.shift_hours)),

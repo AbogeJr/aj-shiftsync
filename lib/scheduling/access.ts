@@ -1,6 +1,6 @@
-import { and, eq } from 'drizzle-orm'
+import { and, eq, gt, isNull, or } from 'drizzle-orm'
 import { db as defaultDb, type Db } from '@/lib/db'
-import { managerLocations } from '@/lib/db/schema'
+import { certifications, managerLocations } from '@/lib/db/schema'
 import { requireRole, type SessionPayload } from '@/lib/auth'
 import { LocationAccessError } from './errors'
 
@@ -59,6 +59,36 @@ export async function authorizeLocation(
 ): Promise<SessionPayload | null> {
   if (actor.kind === 'system') return null
   return requireLocationAccess(locationId, db)
+}
+
+/**
+ * May the caller *view* this location's schedule?
+ *
+ * Wider than requireLocationAccess: staff can read the published schedule at
+ * any location they are certified for, which is how they see who is on with
+ * them and what is open. Editing still needs requireLocationAccess.
+ */
+export async function requireLocationVisibility(
+  locationId: string,
+  db: Db = defaultDb,
+): Promise<SessionPayload> {
+  const session = await requireRole('admin', 'manager', 'staff')
+  if (session.role !== 'staff') return requireLocationAccess(locationId, db)
+
+  const [certified] = await db
+    .select({ id: certifications.id })
+    .from(certifications)
+    .where(
+      and(
+        eq(certifications.staffId, session.userId),
+        eq(certifications.locationId, locationId),
+        or(isNull(certifications.revokedAt), gt(certifications.revokedAt, new Date())),
+      ),
+    )
+    .limit(1)
+
+  if (!certified) throw new LocationAccessError(locationId)
+  return session
 }
 
 export async function requireLocationAccess(

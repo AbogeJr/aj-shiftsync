@@ -19,12 +19,14 @@ export type EligibilityCode =
   | 'outside_availability'
   | 'daily_limit'
   | 'seventh_consecutive_day'
+  | 'shift_ended'
 
 /** Surfaced to the manager but never blocking. */
 export type ComplianceCode =
   | 'daily_warning'
   | 'weekly_warning'
   | 'sixth_consecutive_day'
+  | 'shift_in_progress'
 
 export interface EligibilityViolation {
   code: EligibilityCode | ComplianceCode
@@ -56,6 +58,11 @@ export interface EligibilityContext {
   consecutiveDays: number
   /** A manager has documented a reason to exceed a rule that allows one. */
   overrideProvided?: boolean
+
+  /** The shift is over. Nobody can be scheduled for it. */
+  hasEnded: boolean
+  /** Under way but not finished - allowed, because cover is often found late. */
+  hasStarted: boolean
 }
 
 /** Brief §4. Daily 12h is a hard block; the 7th day needs a documented reason. */
@@ -66,6 +73,17 @@ export const WEEKLY_OVERTIME_AT = 40
 
 export function evaluateEligibility(ctx: EligibilityContext): EligibilityViolation[] {
   const violations: EligibilityViolation[] = []
+
+  // Checked before anything else: a finished shift cannot be staffed, and no
+  // other reason is worth reporting about one.
+  if (ctx.hasEnded) {
+    return [
+      {
+        code: 'shift_ended',
+        message: 'This shift has already finished, so nobody can be added to it.',
+      },
+    ]
+  }
 
   if (ctx.alreadyAssigned) {
     violations.push({
@@ -140,6 +158,15 @@ export function describeViolations(violations: EligibilityViolation[]): string {
  */
 export function evaluateCompliance(ctx: EligibilityContext): EligibilityViolation[] {
   const warnings: EligibilityViolation[] = []
+
+  // Allowed on purpose: the brief's call-out scenario means cover is routinely
+  // found after a shift has begun. Worth flagging, not worth refusing.
+  if (ctx.hasStarted && !ctx.hasEnded) {
+    warnings.push({
+      code: 'shift_in_progress',
+      message: 'This shift is already under way.',
+    })
+  }
 
   if (ctx.dailyHours > DAILY_WARNING_AT && ctx.dailyHours <= DAILY_HARD_LIMIT) {
     warnings.push({

@@ -4,11 +4,13 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Logout } from '@/components/icons'
 import { navItemsFor } from './nav-items'
+import { useUnreadCount } from './notification-watcher'
 import { logout } from '@/app/login/actions'
 
 export function SidebarNav({ role, onNavigate }: { role: string; onNavigate?: () => void }) {
   const pathname = usePathname()
   const items = navItemsFor(role)
+  const unread = useUnreadCount()
 
   return (
     <>
@@ -27,7 +29,17 @@ export function SidebarNav({ role, onNavigate }: { role: string; onNavigate?: ()
                     : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                 }`}
               >
-                <Icon className="h-5 w-5 shrink-0" />
+                <span className="relative">
+                  <Icon className="h-5 w-5 shrink-0" />
+                  {href === '/notifications' && unread > 0 && (
+                    <span
+                      aria-label={`${unread} unread`}
+                      className="absolute -top-1.5 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white"
+                    >
+                      {unread > 9 ? '9+' : unread}
+                    </span>
+                  )}
+                </span>
                 {label}
               </Link>
             </li>

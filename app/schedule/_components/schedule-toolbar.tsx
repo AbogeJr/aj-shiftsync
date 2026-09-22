@@ -1,6 +1,6 @@
 'use client'
 
-import { Chevron, Gear, Upload } from '@/components/icons'
+import { Chevron, Upload } from '@/components/icons'
 import { addWeeks, weekRangeLabel } from '@/lib/format'
 import type { ScheduleFilters } from '@/lib/scheduling/week-view'
 import { FiltersPopover } from './filters-popover'
@@ -13,6 +13,9 @@ export function ScheduleToolbar({
   filters,
   unpublished,
   publishing,
+  canEdit,
+  view,
+  onViewChange,
   onFiltersChange,
   onNavigate,
   onPublish,
@@ -24,6 +27,9 @@ export function ScheduleToolbar({
   filters: ScheduleFilters
   unpublished: number
   publishing: boolean
+  canEdit: boolean
+  view: 'calendar' | 'list'
+  onViewChange: (view: 'calendar' | 'list') => void
   onFiltersChange: (next: ScheduleFilters) => void
   onNavigate: (week: string) => void
   onPublish: () => void
@@ -55,13 +61,22 @@ export function ScheduleToolbar({
       </button>
 
       <div className="ml-auto flex items-center gap-2">
+        <div className="flex rounded-lg border border-slate-300 p-0.5" role="group" aria-label="View">
+          {(['calendar', 'list'] as const).map((option) => (
+            <button
+              key={option}
+              onClick={() => onViewChange(option)}
+              aria-pressed={view === option}
+              className={`rounded-md px-2.5 py-1 text-sm font-medium capitalize ${
+                view === option ? 'bg-brand-500 text-white' : 'text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
         <FiltersPopover skills={skills} filters={filters} onChange={onFiltersChange} />
-        <button
-          aria-label="Schedule settings"
-          className="rounded-lg border border-slate-300 p-2 hover:bg-slate-50"
-        >
-          <Gear className="h-4 w-4" />
-        </button>
+        {canEdit && (
         <button
           disabled={unpublished === 0 || publishing}
           onClick={onPublish}
@@ -70,6 +85,7 @@ export function ScheduleToolbar({
           <Upload className="h-4 w-4" />
           {publishing ? 'Publishing…' : `Publish${unpublished > 0 ? ` (${unpublished})` : ''}`}
         </button>
+        )}
       </div>
     </div>
   )

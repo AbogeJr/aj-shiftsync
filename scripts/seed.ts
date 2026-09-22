@@ -214,9 +214,37 @@ async function main() {
     })),
   )
 
+  // A shift running RIGHT NOW, so the on-duty board has something to show
+  // whatever time the demo is opened: Jim clocked in late, Pam scheduled but
+  // absent. Both are chosen to avoid the 10-hour rest rule against their other
+  // seeded shifts - the constraint rejects the insert otherwise.
+  const nowStart = new Date(Date.now() - 90 * 60 * 1000)
+  const nowEnd = new Date(Date.now() + 6 * 60 * 60 * 1000)
+  const [liveShift] = await db
+    .insert(shifts)
+    .values({
+      locationId: locId.get('mission')!,
+      startsAt: nowStart,
+      endsAt: nowEnd,
+      requiredSkill: 'server',
+      headcount: 3,
+      publishedAt: sql`now()` as never,
+    })
+    .returning({ id: shifts.id })
+
+  await db.execute(sql`
+    INSERT INTO assignments (shift_id, staff_id, status, starts_at, ends_at, clocked_in_at)
+    VALUES (${liveShift.id}, ${staffId.get('Jim Halpert')!}, 'active',
+            ${nowStart.toISOString()}, ${nowEnd.toISOString()},
+            ${new Date(nowStart.getTime() + 20 * 60 * 1000).toISOString()}),
+           (${liveShift.id}, ${staffId.get('Pam Beesly')!}, 'active',
+            ${nowStart.toISOString()}, ${nowEnd.toISOString()}, NULL)
+  `)
+
   console.log(`week of ${dayString(monday, 0)}`)
   console.log(`  ${SKILLS.length} skills, ${insertedLocations.length} locations`)
-  console.log(`  ${insertedStaff.length} staff, ${insertedShifts.length} shifts, ${fills.length} assignments`)
+  console.log(`  ${insertedStaff.length} staff, ${insertedShifts.length + 1} shifts, ${fills.length + 2} assignments`)
+  console.log(`  1 shift is running now (Mission Bay) for the on-duty board`)
   for (const a of DEMO_ACCOUNTS) console.log(`  login: ${a.role.padEnd(8)} ${a.email}`)
 }
 
