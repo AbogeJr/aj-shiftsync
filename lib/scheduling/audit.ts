@@ -50,6 +50,16 @@ export interface AuditQuery {
   locationId?: string
 }
 
+/**
+ * A GET form submits its untouched fields as empty strings, so "no filter"
+ * arrives as '' rather than undefined. Passed through, that reaches Postgres as
+ * ''::uuid or ''::date, which is a syntax error rather than a no-op.
+ */
+function blankToNull(value: string | undefined): string | null {
+  const trimmed = value?.trim()
+  return trimmed ? trimmed : null
+}
+
 /** Audit rows for locations the caller can see. */
 export async function auditTrail(
   query: AuditQuery,
@@ -59,7 +69,10 @@ export async function auditTrail(
   await requireRole('admin', 'manager')
   const scope = (await listAccessibleLocations(db)).map((l) => l.id)
   if (scope.length === 0) return []
-  if (query.locationId) await requireLocationAccess(query.locationId, db)
+  const locationId = blankToNull(query.locationId)
+  const from = blankToNull(query.from)
+  const to = blankToNull(query.to)
+  if (locationId) await requireLocationAccess(locationId, db)
 
   const rows = await db.execute<{
     id: string
@@ -79,9 +92,9 @@ export async function auditTrail(
     LEFT JOIN staff st ON st.id = al.actor_staff_id
     LEFT JOIN locations l ON l.id = al.location_id
     WHERE (al.location_id IS NULL OR al.location_id = ANY(${sql.param(scope)}::uuid[]))
-      AND (${query.locationId ?? null}::uuid IS NULL OR al.location_id = ${query.locationId ?? null}::uuid)
-      AND (${query.from ?? null}::date IS NULL OR al.created_at >= ${query.from ?? null}::date)
-      AND (${query.to ?? null}::date IS NULL OR al.created_at < ${query.to ?? null}::date + 1)
+      AND (${locationId}::uuid IS NULL OR al.location_id = ${locationId}::uuid)
+      AND (${from}::date IS NULL OR al.created_at >= ${from}::date)
+      AND (${to}::date IS NULL OR al.created_at < ${to}::date + 1)
     ORDER BY al.created_at DESC
     LIMIT ${limit}
   `)
