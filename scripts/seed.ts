@@ -72,7 +72,9 @@ const PEOPLE = [
 ] as const
 
 async function main() {
-  // Dependency order.
+  // Dependency order. audit_log is SET NULL on its references rather than
+  // cascading, so it survives a reseed unless cleared explicitly.
+  await db.execute(sql`TRUNCATE audit_log`)
   await db.delete(assignments)
   await db.delete(shifts)
   await db.delete(availabilityRules)
@@ -152,34 +154,58 @@ async function main() {
     ),
   )
 
-  // A week of shifts. Some published, some still draft.
+  // A week of shifts, keyed so the fills below read as names rather than
+  // indexes into a long array.
   const monday = mondayOfThisWeek()
-  const plan: Array<[string, number, string, string, string, number, boolean]> = [
-    // location, day offset, start, end, skill, headcount, published
-    ['mission', 0, '09:00', '17:00', 'server', 2, true],
-    ['mission', 1, '09:00', '17:00', 'line cook', 1, true],
-    ['mission', 2, '11:00', '19:00', 'server', 2, true],
-    ['mission', 3, '09:00', '17:00', 'host', 1, false],
-    ['mission', 4, '16:00', '23:00', 'server', 2, false],
-    ['mission', 5, '16:00', '23:00', 'bartender', 1, false],
-    ['santa', 0, '10:00', '18:00', 'server', 1, true],
-    ['santa', 2, '10:00', '18:00', 'bartender', 1, true],
-    ['santa', 4, '17:00', '23:00', 'server', 2, false],
-    ['village', 1, '09:00', '17:00', 'line cook', 1, true],
-    ['village', 3, '12:00', '20:00', 'bartender', 1, true],
-    ['village', 5, '17:00', '23:00', 'server', 2, false],
-    ['backbay', 2, '09:00', '17:00', 'host', 1, true],
-    ['backbay', 4, '16:00', '23:00', 'line cook', 1, false],
+  type Shift = [key: string, loc: string, day: number, start: string, end: string, skill: string | null, headcount: number, published: boolean]
+  const plan: Shift[] = [
+    // Mission Bay: a full service week, so one location always looks busy.
+    ['m-mon', 'mission', 0, '09:00', '17:00', 'server', 2, true],
+    ['m-tue', 'mission', 1, '09:00', '17:00', 'server', 2, true],
+    ['m-wed', 'mission', 2, '09:00', '17:00', 'server', 2, true],
+    ['m-thu', 'mission', 3, '09:00', '17:00', 'server', 2, true],
+    ['m-fri', 'mission', 4, '09:00', '17:00', 'server', 2, true],
+    ['m-sat', 'mission', 5, '09:00', '17:00', 'server', 2, true],
+    ['m-mon-cook', 'mission', 0, '10:00', '18:00', 'line cook', 1, true],
+    ['m-wed-cook', 'mission', 2, '10:00', '18:00', 'line cook', 1, true],
+    ['m-thu-host', 'mission', 3, '11:00', '19:00', 'host', 1, true],
+    ['m-fri-eve', 'mission', 4, '17:00', '23:00', 'server', 2, true],
+    ['m-sat-eve', 'mission', 5, '17:00', '23:00', 'server', 2, true],
+    ['m-sun', 'mission', 6, '10:00', '18:00', 'server', 2, false],
+
+    ['s-mon', 'santa', 0, '10:00', '18:00', 'server', 1, true],
+    ['s-tue', 'santa', 1, '10:00', '18:00', 'bartender', 1, true],
+    ['s-wed', 'santa', 2, '10:00', '18:00', 'server', 1, true],
+    ['s-thu', 'santa', 3, '16:00', '22:00', 'bartender', 1, true],
+    ['s-fri-eve', 'santa', 4, '17:00', '23:00', 'server', 2, true],
+    ['s-sat-eve', 'santa', 5, '17:00', '23:00', 'bartender', 1, true],
+
+    ['v-mon', 'village', 0, '09:00', '17:00', 'line cook', 1, true],
+    ['v-tue', 'village', 1, '12:00', '20:00', 'bartender', 1, true],
+    ['v-wed', 'village', 2, '09:00', '17:00', 'server', 1, true],
+    ['v-thu', 'village', 3, '12:00', '20:00', 'bartender', 1, true],
+    ['v-thu-srv', 'village', 3, '09:00', '17:00', 'server', 1, true],
+    ['v-fri-eve', 'village', 4, '17:00', '23:00', 'server', 2, true],
+    ['v-sat-eve', 'village', 5, '18:00', '23:00', 'bartender', 1, true],
+
+    ['b-mon', 'backbay', 0, '09:00', '17:00', 'host', 1, true],
+    ['b-tue', 'backbay', 1, '09:00', '17:00', 'server', 1, true],
+    ['b-wed', 'backbay', 2, '09:00', '17:00', 'host', 1, true],
+    ['b-thu-cook', 'backbay', 3, '16:00', '23:00', 'line cook', 1, true],
+    ['b-fri-cook', 'backbay', 4, '09:00', '17:00', 'line cook', 1, true],
+    ['b-fri-eve', 'backbay', 4, '17:00', '23:00', 'server', 2, true],
+    ['b-sat-eve', 'backbay', 5, '17:00', '23:00', 'server', 1, true],
+    ['b-sat-cook', 'backbay', 5, '09:00', '17:00', 'line cook', 1, false],
   ]
 
   const insertedShifts = await db
     .insert(shifts)
     .values(
-      plan.map(([key, offset, start, end, skill, headcount, published]) => {
-        const tz = locTz.get(key)!
+      plan.map(([, loc, offset, start, end, skill, headcount, published]) => {
+        const tz = locTz.get(loc)!
         const date = dayString(monday, offset)
         return {
-          locationId: locId.get(key)!,
+          locationId: locId.get(loc)!,
           startsAt: localInstant(date, start, tz) as never,
           endsAt: localInstant(date, end, tz) as never,
           requiredSkill: skill,
@@ -188,36 +214,51 @@ async function main() {
         }
       }),
     )
-    .returning({ id: shifts.id, locationId: shifts.locationId, startsAt: shifts.startsAt, endsAt: shifts.endsAt })
+    .returning({ id: shifts.id, startsAt: shifts.startsAt, endsAt: shifts.endsAt })
 
-  // Fill a few shifts. Times are copied from the shift, as assign.ts does.
-  const fills: Array<[number, string]> = [
-    [0, 'Jim Halpert'],
-    [0, 'Angela Martin'],
-    [1, 'Dwight Schrute'],
-    [2, 'Angela Martin'],
-    [6, 'Kevin Malone'],
-    // Oscar works BOTH a Pacific and an Eastern location in the same week:
-    // one availability window across two clocks, and cross-location load.
-    [7, 'Oscar Martinez'],
-    [11, 'Oscar Martinez'],
-    [9, 'Stanley Hudson'],
-    [10, 'Phyllis Vance'],
-    [12, 'Kelly Kapoor'],
+  const shiftOf = new Map(plan.map(([key], i) => [key, insertedShifts[i]]))
+
+  // Deliberately uneven, so the dashboard has something to say on first load:
+  //   Angela  6 days straight, 48h  -> overtime, and a 6th consecutive day
+  //   Stanley 36h                   -> at the warning threshold, no overtime
+  //   Jim     both Mission evenings -> skews the premium-shift fairness score
+  //   Dwight  nothing but the live shift below -> far under his desired hours
+  // Every pairing keeps 10 hours clear; b-fri-eve into b-sat-cook is exactly
+  // 10, which the half-open constraint allows on purpose.
+  const fills: Array<[string, string]> = [
+    ['m-mon', 'Angela Martin'], ['m-tue', 'Angela Martin'], ['m-wed', 'Angela Martin'],
+    ['m-thu', 'Angela Martin'], ['m-fri', 'Angela Martin'], ['m-sat', 'Angela Martin'],
+    ['m-mon', 'Jim Halpert'],
+    ['m-thu-host', 'Jim Halpert'],
+    ['m-fri-eve', 'Jim Halpert'],
+    ['m-sat-eve', 'Jim Halpert'],
+
+    ['s-mon', 'Kevin Malone'], ['s-tue', 'Kevin Malone'], ['s-thu', 'Kevin Malone'],
+    ['s-fri-eve', 'Kevin Malone'],
+    // Oscar works one Pacific and one Eastern location in the same week, on a
+    // single availability window: cross-timezone load, visible on Team.
+    ['s-wed', 'Oscar Martinez'], ['s-sat-eve', 'Oscar Martinez'], ['v-fri-eve', 'Oscar Martinez'],
+
+    ['v-mon', 'Andy Bernard'], ['b-thu-cook', 'Andy Bernard'], ['b-fri-cook', 'Andy Bernard'],
+    ['b-tue', 'Stanley Hudson'], ['v-wed', 'Stanley Hudson'], ['v-thu-srv', 'Stanley Hudson'],
+    ['b-fri-eve', 'Stanley Hudson'], ['b-sat-eve', 'Stanley Hudson'],
+    ['v-tue', 'Phyllis Vance'], ['v-thu', 'Phyllis Vance'], ['v-sat-eve', 'Phyllis Vance'],
+    ['b-mon', 'Kelly Kapoor'], ['b-wed', 'Kelly Kapoor'],
   ]
   await db.insert(assignments).values(
-    fills.map(([shiftIndex, name]) => ({
-      shiftId: insertedShifts[shiftIndex].id,
+    fills.map(([key, name]) => ({
+      shiftId: shiftOf.get(key)!.id,
       staffId: staffId.get(name)!,
-      startsAt: insertedShifts[shiftIndex].startsAt,
-      endsAt: insertedShifts[shiftIndex].endsAt,
+      startsAt: shiftOf.get(key)!.startsAt,
+      endsAt: shiftOf.get(key)!.endsAt,
     })),
   )
 
-  // A shift running RIGHT NOW, so the on-duty board has something to show
-  // whatever time the demo is opened: Jim clocked in late, Pam scheduled but
-  // absent. Both are chosen to avoid the 10-hour rest rule against their other
-  // seeded shifts - the constraint rejects the insert otherwise.
+  // A shift running RIGHT NOW, so the on-duty board always has something to
+  // show. Pam and Dwight hold no other seeded shift, which is what makes this
+  // safe: the window moves with the clock, and anyone with a fixed shift the
+  // same day would sooner or later overlap it and trip the rest constraint.
+  // No required skill, because the pair is chosen for availability, not trade.
   const nowStart = new Date(Date.now() - 90 * 60 * 1000)
   const nowEnd = new Date(Date.now() + 6 * 60 * 60 * 1000)
   const [liveShift] = await db
@@ -226,7 +267,7 @@ async function main() {
       locationId: locId.get('mission')!,
       startsAt: nowStart,
       endsAt: nowEnd,
-      requiredSkill: 'server',
+      requiredSkill: null,
       headcount: 3,
       publishedAt: sql`now()` as never,
     })
@@ -234,17 +275,46 @@ async function main() {
 
   await db.execute(sql`
     INSERT INTO assignments (shift_id, staff_id, status, starts_at, ends_at, clocked_in_at)
-    VALUES (${liveShift.id}, ${staffId.get('Jim Halpert')!}, 'active',
+    VALUES (${liveShift.id}, ${staffId.get('Pam Beesly')!}, 'active',
             ${nowStart.toISOString()}, ${nowEnd.toISOString()},
             ${new Date(nowStart.getTime() + 20 * 60 * 1000).toISOString()}),
-           (${liveShift.id}, ${staffId.get('Pam Beesly')!}, 'active',
+           (${liveShift.id}, ${staffId.get('Dwight Schrute')!}, 'active',
             ${nowStart.toISOString()}, ${nowEnd.toISOString()}, NULL)
+  `)
+  await db.execute(sql`
+    INSERT INTO swap_requests (assignment_id, requested_by, requested_to, target_assignment_id, kind, status, reason)
+    SELECT mine.id, ${staffId.get('Jim Halpert')!}, ${staffId.get('Angela Martin')!}, theirs.id,
+           'swap', 'peer_accepted', 'Family thing on Saturday night.'
+    FROM assignments mine, assignments theirs
+    WHERE mine.shift_id = ${shiftOf.get('m-sat-eve')!.id} AND mine.staff_id = ${staffId.get('Jim Halpert')!}
+      AND theirs.shift_id = ${shiftOf.get('m-sat')!.id} AND theirs.staff_id = ${staffId.get('Angela Martin')!}
+  `)
+  await db.execute(sql`
+    INSERT INTO swap_requests (assignment_id, requested_by, kind, status, reason, expires_at)
+    SELECT a.id, ${staffId.get('Phyllis Vance')!}, 'drop', 'open',
+           'Double booked, sorry.', now() + interval '18 hours'
+    FROM assignments a
+    WHERE a.shift_id = ${shiftOf.get('v-thu')!.id} AND a.staff_id = ${staffId.get('Phyllis Vance')!}
+  `)
+
+  await db.execute(sql`
+    INSERT INTO notifications (staff_id, type, payload) VALUES
+      (${staffId.get('Jim Halpert')!}, 'schedule.published',
+       '{"title":"Your schedule has been published","body":"4 shifts this week."}'),
+      (${staffId.get('Jim Halpert')!}, 'shift.assigned',
+       '{"title":"You have a new shift","body":"Saturday evening at Mission Bay."}'),
+      (${staffId.get('Angela Martin')!}, 'swap.requested',
+       '{"title":"Jim Halpert wants to swap with you","body":"Saturday evening for your Saturday day shift."}'),
+      (${staffId.get('Pam Beesly')!}, 'swap.accepted',
+       '{"title":"A swap is ready for your approval","body":"Jim Halpert and Angela Martin have agreed."}'),
+      (${staffId.get('Andy Bernard')!}, 'compliance.warning',
+       '{"title":"A shift was offered up","body":"Phyllis Vance, Thursday at West Village."}')
   `)
 
   console.log(`week of ${dayString(monday, 0)}`)
   console.log(`  ${SKILLS.length} skills, ${insertedLocations.length} locations`)
   console.log(`  ${insertedStaff.length} staff, ${insertedShifts.length + 1} shifts, ${fills.length + 2} assignments`)
-  console.log(`  1 shift is running now (Mission Bay) for the on-duty board`)
+  console.log(`  1 shift running now (Mission Bay), 1 swap awaiting approval, 1 drop expiring`)
   for (const a of DEMO_ACCOUNTS) console.log(`  login: ${a.role.padEnd(8)} ${a.email}`)
 }
 
