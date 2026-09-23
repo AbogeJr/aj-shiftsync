@@ -168,19 +168,12 @@ export async function assignStaffToShift(
   } catch (err) {
     if (isExclusionViolation(err, NO_OVERLAP_OR_SHORT_REST)) {
       // The constraint reports THAT the write is illegal, not which shift
-      // collided or whether the cause was overlap or short rest.
-      //
-      // TODO(validator): build `explanation` here. Load the staff member's
-      // active assignments in shift.starts_at - 10h .. shift.ends_at + 10h and
-      // pass them with the candidate interval to a pure function, so it is
-      // testable without a database and reusable for pre-flight UI warnings.
-      const explanation = undefined
-
+      // collided or whether the cause was overlap or short rest, so the message
+      // names both rules rather than guessing at one.
       throw new ConflictError({
         message:
           'Assignment rejected: it would overlap another shift or leave under 10 hours of rest.',
         constraint: NO_OVERLAP_OR_SHORT_REST,
-        explanation,
         detail: asPostgresError(err)?.detail,
         cause: err,
       })

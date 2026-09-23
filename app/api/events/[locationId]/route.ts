@@ -3,7 +3,6 @@ import { requireLocationAccess } from '@/lib/scheduling/access'
 
 // Must be the Node runtime: the bus holds a long-lived pg TCP connection.
 export const runtime = 'nodejs'
-// Never prerender or cache a stream.
 export const dynamic = 'force-dynamic'
 
 const HEARTBEAT_MS = 15_000
@@ -14,9 +13,18 @@ export async function GET(
 ): Promise<Response> {
   const { locationId } = await params
 
-  // A location id is guessable, so the stream is authorized before it opens.
+  // One stream can cover several locations - the combined week subscribes to
+  // all of them - so the segment is a comma-separated set rather than one id.
+  // One connection instead of N also keeps clear of the browser's per-origin
+  // connection cap.
+  const wanted = new Set(locationId.split(',').filter(Boolean))
+  if (wanted.size === 0) return new Response('Bad request', { status: 400 })
+
+  // A location id is guessable, so every one is authorized before the stream
+  // opens. All or nothing: a partial subscription would look live while
+  // silently missing changes.
   try {
-    await requireLocationAccess(locationId)
+    await Promise.all([...wanted].map((id) => requireLocationAccess(id)))
   } catch {
     return new Response('Forbidden', { status: 403 })
   }
@@ -38,8 +46,8 @@ export async function GET(
       }
 
       const unsubscribe = subscribeToScheduleChanges((event) => {
-        // Fan-out happens in-process; each stream filters to its own location.
-        if (event.locationId !== locationId) return
+        // Fan-out happens in-process; each stream filters to its own locations.
+        if (!wanted.has(event.locationId)) return
         send(`event: schedule_change\ndata: ${JSON.stringify(event)}\n\n`)
       })
 

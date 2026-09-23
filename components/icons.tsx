@@ -16,12 +16,7 @@ export const Chevron = ({ className }: P) => (
 export const Filter = ({ className }: P) => (
   <svg {...stroke} className={className}><path d="M3 5h18l-7 8v6l-4 2v-8Z" /></svg>
 )
-export const Gear = ({ className }: P) => (
-  <svg {...stroke} className={className}>
-    <circle cx="12" cy="12" r="3" />
-    <path d="M19.9 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 1 1-4 0v-.2A1.7 1.7 0 0 0 7.6 19l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.9H3a2 2 0 1 1 0-4h.2A1.7 1.7 0 0 0 5 7.6l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 2.9-1.2V3a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0 1.2 2.9H21a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.5 1Z" />
-  </svg>
-)
+
 export const Search = ({ className }: P) => (
   <svg {...stroke} className={className}><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
 )
@@ -60,6 +55,9 @@ export const Swap = ({ className }: P) => (
   <svg {...stroke} className={className}>
     <path d="M4 7h13l-3-3M20 17H7l3 3" />
   </svg>
+)
+export const Shield = ({ className }: P) => (
+  <svg {...stroke} className={className}><path d="M12 3l7 3v6c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6Z" /></svg>
 )
 export const Bell = ({ className }: P) => (
   <svg {...stroke} className={className}>

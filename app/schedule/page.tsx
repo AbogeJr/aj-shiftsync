@@ -1,8 +1,11 @@
 import { redirect } from 'next/navigation'
 import { ForbiddenError, getSession, UnauthorizedError } from '@/lib/auth'
 import {
+  ALL_LOCATIONS,
+  getCombinedWeekSchedule,
   getWeekSchedule,
   listAccessibleLocations,
+  listSkills,
   todayAtLocation,
   weekStartOf,
 } from '@/lib/scheduling/schedule'
@@ -38,16 +41,23 @@ export default async function SchedulePage({
     )
   }
 
+  const combined = params.location === ALL_LOCATIONS
   const location = locations.find((l) => l.id === params.location) ?? locations[0]
-  // "This week" means this week where the restaurant is, not where the server is.
+  // "This week" means this week where the restaurant is, not where the server
+  // is. Across locations there is no single answer, so the first one anchors
+  // which week is shown - the seven dates are the same either way.
   const today = await todayAtLocation(location.timezone)
   const week = weekStartOf(params.week ?? today)
-  const schedule = await getWeekSchedule(location.id, week)
+  const [schedule, skills] = await Promise.all([
+    combined ? getCombinedWeekSchedule(week) : getWeekSchedule(location.id, week),
+    listSkills(),
+  ])
 
   return (
     <ScheduleView
       schedule={schedule}
       locations={locations}
+      skills={skills}
       role={session.role}
       canEdit={session.role !== 'staff'}
       today={today}

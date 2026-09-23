@@ -19,6 +19,8 @@ const staff: ScheduleStaff[] = [
 ]
 
 const shift = (over: Partial<ScheduleShift> & { id: string }): ScheduleShift => ({
+  locationId: 'loc-1',
+  locationName: 'Back Bay',
   localDate: '2026-09-21',
   startLocal: '09:00',
   endLocal: '17:00',

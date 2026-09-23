@@ -20,7 +20,7 @@ export async function claimShiftAction(
       return { ok: false, error: err.violations.map((v) => v.message).join(' ') }
     }
     if (err instanceof ConflictError) {
-      return { ok: false, error: err.explanation ?? err.message }
+      return { ok: false, error: err.message }
     }
     if (err instanceof LocationAccessError) {
       return { ok: false, error: 'That shift is no longer available to pick up.' }

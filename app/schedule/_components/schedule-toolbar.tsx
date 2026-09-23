@@ -12,6 +12,7 @@ export function ScheduleToolbar({
   skills,
   filters,
   unpublished,
+  published,
   publishing,
   canEdit,
   view,
@@ -19,6 +20,7 @@ export function ScheduleToolbar({
   onFiltersChange,
   onNavigate,
   onPublish,
+  onUnpublish,
 }: {
   days: string[]
   weekStart: string
@@ -26,6 +28,7 @@ export function ScheduleToolbar({
   skills: string[]
   filters: ScheduleFilters
   unpublished: number
+  published: number
   publishing: boolean
   canEdit: boolean
   view: 'calendar' | 'list'
@@ -33,6 +36,7 @@ export function ScheduleToolbar({
   onFiltersChange: (next: ScheduleFilters) => void
   onNavigate: (week: string) => void
   onPublish: () => void
+  onUnpublish: () => void
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-4 py-2.5">
@@ -76,6 +80,16 @@ export function ScheduleToolbar({
           ))}
         </div>
         <FiltersPopover skills={skills} filters={filters} onChange={onFiltersChange} />
+        {canEdit && published > 0 && (
+          <button
+            disabled={publishing}
+            onClick={onUnpublish}
+            title="Take the published week back to draft so staff stop seeing it"
+            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium hover:bg-slate-50 disabled:opacity-40"
+          >
+            Unpublish
+          </button>
+        )}
         {canEdit && (
         <button
           disabled={unpublished === 0 || publishing}

@@ -37,21 +37,3 @@ export function Button({
     </button>
   )
 }
-
-export function IconButton({
-  label,
-  className = '',
-  children,
-  ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { label: string; children: ReactNode }) {
-  return (
-    <button
-      {...props}
-      aria-label={label}
-      title={label}
-      className={`inline-flex items-center justify-center rounded-lg border border-slate-300 p-2 text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-40 ${className}`}
-    >
-      {children}
-    </button>
-  )
-}

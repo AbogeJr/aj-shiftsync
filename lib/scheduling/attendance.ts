@@ -158,9 +158,15 @@ export async function onDutyNow(db: Db = defaultDb): Promise<OnDutyLocation[]> {
     WHERE a.status = 'active'
       AND sh.location_id = ANY(${sql.param(ids)}::uuid[])
       AND a.clocked_out_at IS NULL
-      -- On duty, or due on the floor: started, and not yet an hour past the end.
-      AND now() >= sh.starts_at
-      AND now() < sh.ends_at + interval '1 hour'
+      AND (
+        -- Anyone actually on the floor, whatever the schedule says. Clocking in
+        -- is allowed up to an hour early, so gating this on the scheduled start
+        -- would hide the very people the board exists to show.
+        a.clocked_in_at IS NOT NULL
+        -- Due but absent: only once the shift has started, and only until an
+        -- hour past the end, after which it is a no-show rather than news.
+        OR (now() >= sh.starts_at AND now() < sh.ends_at + interval '1 hour')
+      )
     ORDER BY st.name
   `)
 

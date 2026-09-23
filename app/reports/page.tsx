@@ -1,15 +1,21 @@
 import { Alert, Badge, Card, EmptyState, PageHeader } from '@/components/ui/feedback'
 import { handleAuthError, requireManagerPage } from '@/components/layout/protected-page'
-import { fairnessReport } from '@/lib/scheduling/insights'
+import { WeekNav } from '@/components/layout/week-nav'
+import { fairnessReport, premiumFairness } from '@/lib/scheduling/insights'
 import { hours as fmtHours } from '@/lib/format'
 import { OVERTIME_HOURS } from '@/lib/scheduling/week-view'
+import { WEEKLY_WARNING_AT as OVERTIME_WARNING_AT } from '@/lib/scheduling/eligibility'
 
 export const dynamic = 'force-dynamic'
 
-const OVERTIME_WARNING_AT = 35
 
-export default async function ReportsPage() {
-  const { weekStart } = await requireManagerPage()
+export default async function ReportsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ week?: string }>
+}) {
+  const { week } = await searchParams
+  const { weekStart, thisWeek } = await requireManagerPage(week)
 
   let rows
   try {
@@ -18,6 +24,13 @@ export default async function ReportsPage() {
     handleAuthError(err)
   }
 
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(`${weekStart}T00:00:00Z`)
+    d.setUTCDate(d.getUTCDate() + i)
+    return d.toISOString().slice(0, 10)
+  })
+
+  const fairness = premiumFairness(rows)
   const atRisk = rows.filter((r) => r.hours >= OVERTIME_WARNING_AT)
   const premiumTotal = rows.reduce((n, r) => n + r.premiumShifts, 0)
   const scheduled = rows.filter((r) => r.hours > 0)
@@ -25,7 +38,11 @@ export default async function ReportsPage() {
 
   return (
     <>
-      <PageHeader title="Reports" subtitle="Overtime exposure and shift fairness for this week" />
+      <PageHeader
+        title="Reports"
+        subtitle="Overtime exposure and shift fairness"
+        action={<WeekNav weekStart={weekStart} thisWeek={thisWeek} days={days} path="/reports" />}
+      />
 
       <div className="flex-1 space-y-4 overflow-auto p-4 sm:p-6">
         <Card title="Overtime watch">
@@ -93,6 +110,44 @@ export default async function ReportsPage() {
             Friday and Saturday evenings from 17:00, in each location&apos;s own timezone. Derived
             from shift times rather than stored, so it cannot drift.
           </p>
+
+          {fairness.totalPremium > 0 && (
+            <div className="mb-4 rounded-lg bg-slate-50 p-3">
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-semibold tabular">{fairness.score}</span>
+                <span className="text-xs text-slate-500">/ 100 fairness score</span>
+              </div>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200">
+                <div
+                  className={`h-full rounded-full ${
+                    fairness.score >= 85
+                      ? 'bg-green-500'
+                      : fairness.score >= 70
+                        ? 'bg-amber-500'
+                        : 'bg-rose-500'
+                  }`}
+                  style={{ width: `${fairness.score}%` }}
+                />
+              </div>
+              <p className="mt-2 text-xs text-slate-600">
+                {fairness.misallocated < 0.5 ? (
+                  <>Premium shifts match everyone&apos;s share of the hours worked.</>
+                ) : (
+                  <>
+                    <strong className="tabular">{fairness.misallocated.toFixed(1)}</strong> of{' '}
+                    {fairness.totalPremium} premium shifts would have to change hands to match each
+                    person&apos;s share of the hours worked.
+                  </>
+                )}
+              </p>
+              {fairness.rows[0] && fairness.rows[0].delta < -0.5 && (
+                <p className="mt-1 text-xs text-amber-700">
+                  Least served: {fairness.rows[0].name} — {fairness.rows[0].premium} against{' '}
+                  {fairness.rows[0].expected.toFixed(1)} expected for their hours.
+                </p>
+              )}
+            </div>
+          )}
           {premiumTotal === 0 ? (
             <EmptyState>No premium shifts assigned this week.</EmptyState>
           ) : (

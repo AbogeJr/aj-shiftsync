@@ -23,6 +23,8 @@ export function databaseUrl(): string | undefined {
   return process.env.DATABASE_URL
 }
 
+// The strict counterpart, for tooling that cannot run at all without a
+// database: drizzle-kit generating and applying migrations.
 export function requireDatabaseUrl(): string {
   const url = databaseUrl()
   if (!url) throw new Error('Missing DATABASE_URL. Copy .env.example to .env.local.')

@@ -1,5 +1,6 @@
 import { Badge, Card, EmptyState, PageHeader } from '@/components/ui/feedback'
 import { handleAuthError, requireManagerPage } from '@/components/layout/protected-page'
+import { WeekNav } from '@/components/layout/week-nav'
 import { teamOverview } from '@/lib/scheduling/insights'
 import { hours as fmtHours, money } from '@/lib/format'
 import { skillStyle } from '@/components/ui/skill-style'
@@ -7,8 +8,13 @@ import { OVERTIME_HOURS } from '@/lib/scheduling/week-view'
 
 export const dynamic = 'force-dynamic'
 
-export default async function TeamPage() {
-  const { weekStart } = await requireManagerPage()
+export default async function TeamPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ week?: string }>
+}) {
+  const { week } = await searchParams
+  const { weekStart, thisWeek } = await requireManagerPage(week)
 
   let team
   try {
@@ -17,11 +23,18 @@ export default async function TeamPage() {
     handleAuthError(err)
   }
 
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(`${weekStart}T00:00:00Z`)
+    d.setUTCDate(d.getUTCDate() + i)
+    return d.toISOString().slice(0, 10)
+  })
+
   return (
     <>
       <PageHeader
         title="Team"
         subtitle="Hours are totals across every location, not just the one you are viewing"
+        action={<WeekNav weekStart={weekStart} thisWeek={thisWeek} days={days} path="/team" />}
       />
 
       <div className="flex-1 overflow-auto p-4 sm:p-6">
@@ -38,7 +51,7 @@ export default async function TeamPage() {
                     <th className="pb-2 font-semibold">Person</th>
                     <th className="pb-2 font-semibold">Skills</th>
                     <th className="pb-2 font-semibold">Certified at</th>
-                    <th className="pb-2 font-semibold">This week</th>
+                    <th className="pb-2 font-semibold">Hours</th>
                     <th className="pb-2 text-right font-semibold">Rate</th>
                   </tr>
                 </thead>

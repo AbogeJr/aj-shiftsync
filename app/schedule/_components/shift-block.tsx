@@ -4,10 +4,13 @@ import type { ScheduleShift } from '@/lib/scheduling/schedule'
 
 export function ShiftBlock({
   shift,
+  showLocation,
   onEdit,
   onUnassign,
 }: {
   shift: ScheduleShift
+  /** Only in the combined week, where a block's location is not implied. */
+  showLocation?: boolean
   onEdit?: () => void
   onUnassign?: () => void
 }) {
@@ -39,6 +42,7 @@ export function ShiftBlock({
         {shift.overnight && <span title="Ends the next day"> +1</span>}
       </div>
       <div className="truncate">{shift.requiredSkill}</div>
+      {showLocation && <div className="truncate opacity-70">{shift.locationName}</div>}
       </button>
     </div>
   )
@@ -47,10 +51,12 @@ export function ShiftBlock({
 export function OpenShiftBlock({
   shift,
   open,
+  showLocation,
   onClick,
 }: {
   shift: ScheduleShift
   open: number
+  showLocation?: boolean
   onClick?: () => void
 }) {
   return (
@@ -66,6 +72,7 @@ export function OpenShiftBlock({
       <div className="truncate">
         {shift.requiredSkill} · {open} open
       </div>
+      {showLocation && <div className="truncate opacity-70">{shift.locationName}</div>}
     </button>
   )
 }

@@ -60,6 +60,42 @@ function blankToNull(value: string | undefined): string | null {
   return trimmed ? trimmed : null
 }
 
+/** One place for the projection, so the trail and a single shift's history agree. */
+interface AuditRow extends Record<string, unknown> {
+  id: string
+  at: string
+  actor: string | null
+  action: string
+  entity_type: string
+  entity_id: string
+  location: string | null
+  before: string | null
+  after: string | null
+}
+
+const AUDIT_SELECT = sql`
+  SELECT al.id, to_char(al.created_at, 'YYYY-MM-DD HH24:MI') AS at,
+         st.name AS actor, al.action, al.entity_type, al.entity_id,
+         l.name AS location, al.before::text, al.after::text
+  FROM audit_log al
+  LEFT JOIN staff st ON st.id = al.actor_staff_id
+  LEFT JOIN locations l ON l.id = al.location_id
+`
+
+function toEntry(r: AuditRow): AuditEntry {
+  return {
+    id: r.id,
+    at: r.at,
+    actor: r.actor ?? 'system',
+    action: r.action,
+    entityType: r.entity_type,
+    entityId: r.entity_id,
+    location: r.location,
+    before: r.before,
+    after: r.after,
+  }
+}
+
 /** Audit rows for locations the caller can see. */
 export async function auditTrail(
   query: AuditQuery,
@@ -74,23 +110,8 @@ export async function auditTrail(
   const to = blankToNull(query.to)
   if (locationId) await requireLocationAccess(locationId, db)
 
-  const rows = await db.execute<{
-    id: string
-    at: string
-    actor: string | null
-    action: string
-    entity_type: string
-    entity_id: string
-    location: string | null
-    before: string | null
-    after: string | null
-  }>(sql`
-    SELECT al.id, to_char(al.created_at, 'YYYY-MM-DD HH24:MI') AS at,
-           st.name AS actor, al.action, al.entity_type, al.entity_id,
-           l.name AS location, al.before::text, al.after::text
-    FROM audit_log al
-    LEFT JOIN staff st ON st.id = al.actor_staff_id
-    LEFT JOIN locations l ON l.id = al.location_id
+  const rows = await db.execute<AuditRow>(sql`
+    ${AUDIT_SELECT}
     WHERE (al.location_id IS NULL OR al.location_id = ANY(${sql.param(scope)}::uuid[]))
       AND (${locationId}::uuid IS NULL OR al.location_id = ${locationId}::uuid)
       AND (${from}::date IS NULL OR al.created_at >= ${from}::date)
@@ -99,30 +120,43 @@ export async function auditTrail(
     LIMIT ${limit}
   `)
 
-  return rows.rows.map((r) => ({
-    id: r.id,
-    at: r.at,
-    actor: r.actor ?? 'system',
-    action: r.action,
-    entityType: r.entity_type,
-    entityId: r.entity_id,
-    location: r.location,
-    before: r.before,
-    after: r.after,
-  }))
+  return rows.rows.map(toEntry)
 }
 
-/** History of one shift, for the brief's "view the history of any shift". */
+/**
+ * History of one shift, for the brief's "view the history of any shift".
+ *
+ * Matching happens in SQL rather than by filtering a page of the general trail:
+ * a shift's own entries can be arbitrarily far back, so any LIMIT applied before
+ * the filter silently truncates its history.
+ *
+ * Three ways an entry can belong to a shift: it names the shift directly, or it
+ * is an assignment whose before/after state mentions the shift id. The JSON is
+ * matched as text because the shape differs per action, and a uuid is specific
+ * enough that a substring match cannot collide.
+ */
 export async function shiftHistory(shiftId: string, db: Db = defaultDb): Promise<AuditEntry[]> {
   await requireRole('admin', 'manager')
-  const rows = await db.execute<{ location_id: string | null }>(
+  const scope = (await listAccessibleLocations(db)).map((l) => l.id)
+  if (scope.length === 0) return []
+
+  const shift = await db.execute<{ location_id: string | null }>(
     sql`SELECT location_id FROM shifts WHERE id = ${shiftId}`,
   )
-  const locationId = rows.rows[0]?.location_id
+  // A deleted shift leaves no row to authorize against, so the scope filter
+  // below is what keeps its history from leaking to another manager.
+  const locationId = shift.rows[0]?.location_id
   if (locationId) await requireLocationAccess(locationId, db)
 
-  const entries = await auditTrail({}, 500, db)
-  return entries.filter((e) => e.entityId === shiftId || (e.after ?? '').includes(shiftId))
+  const rows = await db.execute<AuditRow>(sql`
+    ${AUDIT_SELECT}
+    WHERE (al.location_id IS NULL OR al.location_id = ANY(${sql.param(scope)}::uuid[]))
+      AND (al.entity_id = ${shiftId}
+           OR al.after::text  LIKE '%' || ${shiftId}::text || '%'
+           OR al.before::text LIKE '%' || ${shiftId}::text || '%')
+    ORDER BY al.created_at DESC
+  `)
+  return rows.rows.map(toEntry)
 }
 
 function csvCell(value: string | null): string {

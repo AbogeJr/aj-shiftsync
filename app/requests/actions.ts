@@ -11,7 +11,7 @@ export interface ActionResult { ok: boolean; error?: string }
 
 function describe(err: unknown): string {
   if (err instanceof SwapError) return err.message
-  if (err instanceof ConflictError) return err.explanation ?? err.message
+  if (err instanceof ConflictError) return err.message
   if (err instanceof UnauthorizedError || err instanceof ForbiddenError) {
     return 'Your session has expired. Reload and sign in again.'
   }

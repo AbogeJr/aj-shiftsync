@@ -146,10 +146,6 @@ export function evaluateEligibility(ctx: EligibilityContext): EligibilityViolati
   return violations
 }
 
-export function describeViolations(violations: EligibilityViolation[]): string {
-  return violations.map((v) => v.message).join(' ')
-}
-
 /**
  * Figures a manager should see but that never block an assignment.
  *

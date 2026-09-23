@@ -8,20 +8,17 @@ export class ConflictError extends Error {
   readonly code = 'SCHEDULING_CONFLICT' as const
   readonly constraint: string
   /** Which shift collided and why. Populated by the validator; see assign.ts. */
-  readonly explanation?: string
   /** Raw Postgres DETAIL, for logs only. Never shown to an end user. */
   readonly detail?: string
 
   constructor(args: {
     message: string
     constraint: string
-    explanation?: string
     detail?: string
     cause?: unknown
   }) {
     super(args.message, { cause: args.cause })
     this.constraint = args.constraint
-    this.explanation = args.explanation
     this.detail = args.detail
   }
 }

@@ -3,6 +3,7 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { Chevron } from '@/components/icons'
 import type { ScheduleLocation } from '@/lib/scheduling/schedule'
+import { ALL_LOCATIONS } from '@/lib/scheduling/week-view'
 
 export function LocationSwitcher({
   current,
@@ -25,6 +26,17 @@ export function LocationSwitcher({
           sideOffset={6}
           className="z-50 min-w-56 rounded-lg border border-slate-200 bg-white p-1 shadow-lg"
         >
+          <DropdownMenu.Item
+            onSelect={() => onSelect(ALL_LOCATIONS)}
+            className={`cursor-pointer rounded-md px-2.5 py-2 text-sm outline-none data-highlighted:bg-slate-100 ${
+              current.id === ALL_LOCATIONS ? 'font-semibold text-brand-600' : ''
+            }`}
+          >
+            <div>All locations</div>
+            <div className="text-xs text-slate-500">Every location you can see</div>
+          </DropdownMenu.Item>
+          <div className="my-1 h-px bg-slate-200" />
+
           {locations.map((location) => (
             <DropdownMenu.Item
               key={location.id}

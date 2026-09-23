@@ -29,6 +29,11 @@ export const DEMO_ACCOUNTS: ReadonlyArray<{ role: Role; email: string; name: str
   { role: 'staff', email: 'staff@shiftsync.test', name: 'Jim Halpert' },
 ]
 
+/** Where a role lands after signing in. Managers and admins get the roll-up. */
+export function homePathFor(role: Role): string {
+  return role === 'staff' ? '/my-shifts' : '/overview'
+}
+
 export class UnauthorizedError extends Error {
   readonly name = 'UnauthorizedError'
   readonly code = 'UNAUTHORIZED' as const

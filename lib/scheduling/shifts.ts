@@ -352,3 +352,96 @@ export async function publishWeek(
   publishScheduleChange({ locationId, type: 'shift.updated' })
   return { published, notified }
 }
+
+/**
+ * Take a week back off the board (brief §2: "unpublish ... before a
+ * configurable cutoff").
+ *
+ * Shifts already inside their location's lock window are left alone rather than
+ * failing the whole call: somebody turning up tomorrow should not have their
+ * shift vanish because a manager wanted to redraw next week. If *every*
+ * candidate is locked, that is a refusal the manager needs to see, so it throws.
+ *
+ * Staff are told. A schedule that silently disappears is worse than one that
+ * changes, because the person keeps planning around a shift nobody has.
+ */
+export async function unpublishWeek(
+  locationId: string,
+  weekStart: string,
+  db: Db = defaultDb,
+  actor: Actor = SESSION_ACTOR,
+): Promise<{ unpublished: number; locked: number; notified: number }> {
+  await authorizeLocation(locationId, actor, db)
+  const tz = await locationTimezone(db, locationId)
+
+  let unpublished = 0
+  let locked = 0
+  let notified = 0
+
+  await db.transaction(async (tx) => {
+    // Count what the cutoff protects before changing anything, so the caller
+    // can be told why a week only partly came down.
+    const lockedRows = await tx.execute<{ n: number }>(sql`
+      SELECT count(*)::int AS n
+      FROM shifts sh JOIN locations l ON l.id = sh.location_id
+      WHERE sh.location_id = ${locationId}
+        AND sh.published_at IS NOT NULL
+        AND now() > (sh.starts_at - make_interval(hours => l.edit_cutoff_hours))
+        AND sh.starts_at >= (${weekStart}::text || ' 00:00')::timestamp AT TIME ZONE ${tz}::text
+        AND sh.starts_at <  ((${weekStart}::date + 7)::text || ' 00:00')::timestamp AT TIME ZONE ${tz}::text
+    `)
+    locked = lockedRows.rows[0]?.n ?? 0
+
+    const rows = await tx.execute<{ id: string }>(sql`
+      UPDATE shifts SET published_at = NULL
+      FROM locations l
+      WHERE l.id = shifts.location_id
+        AND shifts.location_id = ${locationId}
+        AND shifts.published_at IS NOT NULL
+        AND now() <= (shifts.starts_at - make_interval(hours => l.edit_cutoff_hours))
+        AND shifts.starts_at >= (${weekStart}::text || ' 00:00')::timestamp AT TIME ZONE ${tz}::text
+        AND shifts.starts_at <  ((${weekStart}::date + 7)::text || ' 00:00')::timestamp AT TIME ZONE ${tz}::text
+      RETURNING shifts.id
+    `)
+    unpublished = rows.rows.length
+
+    if (unpublished === 0) {
+      if (locked > 0) {
+        const hours = await tx.execute<{ h: number }>(
+          sql`SELECT edit_cutoff_hours AS h FROM locations WHERE id = ${locationId}`,
+        )
+        throw new CutoffError(hours.rows[0]?.h ?? 48)
+      }
+      return
+    }
+
+    const ids = rows.rows.map((r) => r.id)
+    const recipients = await tx.execute<{ staff_id: string; n: number }>(sql`
+      SELECT staff_id, count(*)::int AS n FROM assignments
+      WHERE status = 'active' AND shift_id = ANY(${sql.param(ids)}::uuid[])
+      GROUP BY staff_id
+    `)
+
+    for (const person of recipients.rows) {
+      await notify(tx, {
+        staffId: person.staff_id,
+        type: 'schedule.published',
+        title: 'Your schedule has been taken down',
+        body: `${person.n} shift${person.n === 1 ? '' : 's'} for the week of ${weekStart} ${person.n === 1 ? 'is' : 'are'} being reworked. You will be told when it is republished.`,
+        meta: { locationId },
+      })
+      notified += 1
+    }
+
+    await recordAudit(tx, {
+      locationId,
+      entityType: 'schedule',
+      entityId: locationId,
+      action: 'schedule.unpublished',
+      after: { weekStart, shifts: unpublished, locked },
+    })
+  })
+
+  publishScheduleChange({ locationId, type: 'shift.updated' })
+  return { unpublished, locked, notified }
+}

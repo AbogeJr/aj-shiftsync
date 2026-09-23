@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation'
 import { eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { staff } from '@/lib/db/schema'
-import { DEMO_ACCOUNTS, SESSION_COOKIE, signSession, type Role } from '@/lib/auth'
+import { DEMO_ACCOUNTS, homePathFor, SESSION_COOKIE, signSession, type Role } from '@/lib/auth'
 
 /**
  * Sign in as one of the seeded demo accounts. No password: the whole point is
@@ -47,7 +47,7 @@ export async function loginAs(formData: FormData): Promise<void> {
     maxAge: 60 * 60 * 8,
   })
 
-  redirect(member.role === 'staff' ? '/my-shifts' : '/overview')
+  redirect(homePathFor(member.role))
 }
 
 export async function logout(): Promise<void> {

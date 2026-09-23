@@ -30,6 +30,7 @@ export function ScheduleGrid({
   onUnassign,
   onCreateOpenShift,
   canEdit,
+  showLocation,
 }: {
   days: string[]
   today: string
@@ -43,6 +44,7 @@ export function ScheduleGrid({
   onUnassign: (assignmentId: string) => void
   onCreateOpenShift: (day: string) => void
   canEdit: boolean
+  showLocation?: boolean
 }) {
   const byStaffDay = indexByStaffDay(shifts)
   const openByDay = openSlotsByDay(shifts)
@@ -89,26 +91,30 @@ export function ScheduleGrid({
           {days.map((day) => (
             <div
               key={day}
-              className="group/open relative space-y-1 border-r border-slate-200 p-1.5 last:border-r-0"
+              // The bottom padding reserves the strip the Add button sits in, so
+              // it never covers a shift and the row does not jump on hover.
+              className={`group/open relative min-h-14 space-y-1 border-r border-slate-200 p-1.5 last:border-r-0 ${
+                canEdit ? 'pb-8' : ''
+              }`}
             >
-              {canEdit && (
-              <button
-                onClick={() => onCreateOpenShift(day)}
-                aria-label={`Add a shift on ${day}`}
-                title="Add a shift"
-                className="absolute top-1 right-1 hidden h-5 w-5 items-center justify-center rounded text-slate-400 group-hover/open:flex hover:bg-slate-100"
-              >
-                +
-              </button>
-              )}
               {(openByDay.get(day) ?? []).map(({ shift, open: slots }) => (
                 <OpenShiftBlock
                   key={shift.id}
                   shift={shift}
                   open={slots}
+                  showLocation={showLocation}
                   onClick={() => onFindCoverage(shift)}
                 />
               ))}
+              {canEdit && (
+                <button
+                  onClick={() => onCreateOpenShift(day)}
+                  aria-label={`Add a shift on ${day}`}
+                  className="absolute inset-x-1.5 bottom-1.5 flex h-6 items-center justify-center rounded-md border border-dashed border-slate-300 text-xs font-medium text-slate-500 opacity-0 transition group-hover/open:opacity-100 hover:border-brand-500 hover:bg-brand-50 hover:text-brand-600 focus-visible:opacity-100"
+                >
+                  Add +
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -148,6 +154,7 @@ export function ScheduleGrid({
                       <ShiftBlock
                         key={shift.id}
                         shift={shift}
+                        showLocation={showLocation}
                         onEdit={canEdit ? () => onEditShift(shift) : undefined}
                         onUnassign={canEdit ? () => onUnassign(shift.assignmentIds[member.id]) : undefined}
                       />

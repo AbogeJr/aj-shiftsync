@@ -6,9 +6,12 @@
   /* Violet accent on cool neutral grey. */
   --color-brand-50: #f5f3ff;
   --color-brand-100: #ede9fe;
+  --color-brand-200: #ddd6fe;
+  --color-brand-400: #a78bfa;
   --color-brand-500: #7c3aed;
   --color-brand-600: #6d28d9;
   --color-brand-700: #5b21b6;
+  --color-brand-800: #4c1d95;
 }
 
 html,

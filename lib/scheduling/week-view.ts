@@ -5,6 +5,16 @@ import type { ScheduleShift, ScheduleStaff } from './schedule'
  * loaded, so the grid's arithmetic is testable without a database or a browser.
  */
 
+/**
+ * The sentinel the switcher and the `?location=` param use for "every location
+ * I can see". Not a real id, so it can never collide with one.
+ *
+ * It lives here rather than in schedule.ts because client components need it,
+ * and schedule.ts reaches the session through next/headers - importing a value
+ * from there into a client bundle breaks the build.
+ */
+export const ALL_LOCATIONS = 'all'
+
 export interface ScheduleFilters {
   skills: string[]
   unpublishedOnly: boolean

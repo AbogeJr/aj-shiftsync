@@ -6,6 +6,7 @@ import { weekdayLabel } from '@/lib/format'
 import type { ScheduleShift } from '@/lib/scheduling/schedule'
 import { createShiftsAction, deleteShiftAction, updateShiftAction } from '../actions'
 import { useToast } from '@/components/ui/toast'
+import { ShiftHistory } from './shift-history'
 
 export interface EditorTarget {
   mode: 'create' | 'edit'
@@ -182,6 +183,8 @@ export function ShiftEditor({
               </div>
             </>
           )}
+
+          {editing && <ShiftHistory shiftId={editing.id} />}
 
           <div className="mt-6 flex items-center gap-2">
             {editing && (

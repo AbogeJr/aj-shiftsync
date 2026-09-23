@@ -14,7 +14,12 @@ const MANAGER_NAV: NavItem[] = [
   { href: '/requests', label: 'Requests', icon: Swap },
   { href: '/reports', label: 'Reports', icon: Chart },
   { href: '/audit', label: 'Audit', icon: Search },
+  // A manager is also somebody who works shifts - Pam runs a location and is on
+  // the rota. Without these they can see everyone's schedule except their own,
+  // and have nowhere to clock in.
+  { href: '/my-shifts', label: 'My shifts', icon: Calendar },
   { href: '/my-availability', label: 'Availability', icon: Clock },
+  { href: '/my-requests', label: 'My requests', icon: Swap },
   { href: '/notifications', label: 'Alerts', icon: Bell },
 ]
 

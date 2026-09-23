@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { eq, sql } from 'drizzle-orm'
 import { db, pool } from '@/lib/db'
 import {
-  assignments, availabilityRules, certifications, locations, shifts, skills, staff, staffSkills, swapRequests,
+  assignments, availabilityRules, certifications, locations, shifts, staff, staffSkills, swapRequests,
 } from '@/lib/db/schema'
 import { assignStaffToShift } from '@/lib/scheduling/assign'
 import { updateShift } from '@/lib/scheduling/shifts'
@@ -48,7 +48,6 @@ async function holderOf(shiftId: string) {
 }
 
 beforeAll(async () => {
-  await db.insert(skills).values({ name: `srv-${suffix()}` }).onConflictDoNothing()
   const [l] = await db.insert(locations).values({ name: `swap-${suffix()}`, timezone: TZ }).returning({ id: locations.id })
   locationId = l.id
   for (const name of ['Alice', 'Bob']) {

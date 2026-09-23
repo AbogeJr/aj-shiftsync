@@ -569,6 +569,33 @@ export async function claimableDrops(db: Db = defaultDb): Promise<RequestSummary
   return out
 }
 
+/**
+ * Drops that will expire unclaimed, at locations the caller runs.
+ *
+ * The quietest failure in the whole swap workflow: a drop nobody takes simply
+ * lapses, and the shift stays with somebody who has spent a day believing they
+ * were covered. Nothing else surfaces that, so a manager only finds out when
+ * the person does not turn up.
+ */
+export async function dropsNearingExpiry(
+  withinHours = DROP_EXPIRY_HOURS,
+  db: Db = defaultDb,
+): Promise<RequestSummary[]> {
+  const session = await requireRole('admin', 'manager')
+  const rows = await db.execute<any>(sql`
+    ${SUMMARY_SELECT}
+    WHERE r.kind = 'drop' AND r.status = 'open'
+      AND r.expires_at > now()
+      AND r.expires_at <= now() + make_interval(hours => ${withinHours})
+      AND (${session.role} = 'admin' OR EXISTS (
+        SELECT 1 FROM manager_locations ml
+        WHERE ml.staff_id = ${session.userId} AND ml.location_id = sh.location_id
+      ))
+    ORDER BY r.expires_at
+  `)
+  return rows.rows.map((r) => toSummary(r, session.userId))
+}
+
 /** Requests needing a manager decision at locations they run. */
 export async function requestsAwaitingApproval(db: Db = defaultDb): Promise<RequestSummary[]> {
   const session = await requireRole('admin', 'manager')

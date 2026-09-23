@@ -99,6 +99,15 @@ with no principled way to resolve it.
 ranges, so a gap of precisely 10 hours is compliant rather than a violation.
 "Minimum 10 hours between shifts" reads as a floor, not an exclusive bound.
 
+**Overtime pays time-and-a-half.** The brief sets the 40-hour threshold but
+never says what an overtime hour costs. `OVERTIME_MULTIPLIER` is the US FLSA
+default of 1.5, in one place, so a group under a different rule changes it once.
+The overview reports the *premium* — the 0.5x above straight time — because that
+is the avoidable number a manager can act on, with total overtime hours beside
+it. Somebody with no rate on file contributes hours but no money: reporting
+their overtime as $0 would be a lie, so the hours still count and the cost does
+not.
+
 **Premium shifts are derived, never stored.** "Friday/Saturday evening" is
 computed from `shifts.starts_at` in the location's timezone at query time. A
 stored boolean would drift the moment a shift moved, and deriving it stays

@@ -17,6 +17,7 @@ export function ScheduleList({
   staff,
   shifts,
   canEdit,
+  showLocation,
   onEditShift,
   onFindCoverage,
 }: {
@@ -25,6 +26,7 @@ export function ScheduleList({
   staff: ScheduleStaff[]
   shifts: ScheduleShift[]
   canEdit: boolean
+  showLocation?: boolean
   onEditShift: (shift: ScheduleShift) => void
   onFindCoverage: (shift: ScheduleShift) => void
 }) {
@@ -55,6 +57,11 @@ export function ScheduleList({
                         {timeLabel(shift.startLocal)}–{timeLabel(shift.endLocal)}
                         {shift.overnight && <span className="text-slate-400"> +1</span>}
                       </span>
+                      {showLocation && (
+                        <span className="rounded bg-slate-100 px-1.5 text-xs text-slate-600">
+                          {shift.locationName}
+                        </span>
+                      )}
                       {shift.requiredSkill && (
                         <span className={`rounded border px-1.5 text-xs ${skillStyle(shift.requiredSkill)}`}>
                           {shift.requiredSkill}

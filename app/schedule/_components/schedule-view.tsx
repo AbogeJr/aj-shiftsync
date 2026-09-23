@@ -10,13 +10,14 @@ import type {
   WeekSchedule,
 } from '@/lib/scheduling/schedule'
 import {
+  ALL_LOCATIONS,
   availableSkills,
   filterShifts,
   filterStaff,
   NO_FILTERS,
   type ScheduleFilters,
 } from '@/lib/scheduling/week-view'
-import { publishWeekAction, unassignAction } from '../actions'
+import { publishWeekAction, unassignAction, unpublishWeekAction } from '../actions'
 import { useToast } from '@/components/ui/toast'
 import { AssignDialog } from './assign-dialog'
 import { CoverageDialog } from './coverage-dialog'
@@ -34,6 +35,7 @@ import { useLiveSchedule } from './use-live-schedule'
 export function ScheduleView({
   schedule,
   locations,
+  skills,
   role,
   canEdit,
   today,
@@ -41,6 +43,8 @@ export function ScheduleView({
 }: {
   schedule: WeekSchedule
   locations: ScheduleLocation[]
+  /** The whole catalogue - what a new shift may require. */
+  skills: string[]
   role: string
   canEdit: boolean
   today: string
@@ -57,12 +61,26 @@ export function ScheduleView({
   const [editorTarget, setEditorTarget] = useState<EditorTarget | null>(null)
   const [publishing, startPublish] = useTransition()
   const [view, setView] = useState<'calendar' | 'list'>('calendar')
-  const live = useLiveSchedule(location.id)
+
+  // Structural editing is per-location: creating a shift, publishing a week and
+  // editing a shift all need one location to act on, and silently picking one
+  // would be worse than not offering them. Find coverage stays available,
+  // because it is keyed by shift id - which is the whole point of a combined
+  // view when somebody calls out.
+  const combined = location.id === ALL_LOCATIONS
+  const canMutate = canEdit && !combined
+
+  // 'all' is a sentinel, not a location, so the stream is opened against the
+  // real ids behind it.
+  const live = useLiveSchedule(
+    combined ? locations.map((l) => l.id).join(',') : location.id,
+  )
   const toast = useToast()
 
   const visibleShifts = filterShifts(shifts, filters)
   const visibleStaff = filterStaff(staff, filters.search)
   const unpublished = shifts.filter((shift) => !shift.published).length
+  const published = shifts.length - unpublished
 
   function navigate(next: Partial<{ location: string; week: string }>) {
     const params = new URLSearchParams({ location: location.id, week: weekStart, ...next })
@@ -81,6 +99,14 @@ export function ScheduleView({
           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
             {location.timezone}
           </span>
+          {combined && (
+            <span
+              className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-900"
+              title="You can still use Find coverage from here"
+            >
+              editing is per-location
+            </span>
+          )}
           <div className="ml-auto flex items-center gap-3 text-xs text-slate-500">
             <span className="flex items-center gap-1.5" title={live ? 'Receiving live updates' : 'Reconnecting…'}>
               <span
@@ -102,8 +128,9 @@ export function ScheduleView({
           skills={availableSkills(shifts)}
           filters={filters}
           unpublished={unpublished}
+          published={published}
           publishing={publishing}
-          canEdit={canEdit}
+          canEdit={canMutate}
           view={view}
           onViewChange={setView}
           onFiltersChange={setFilters}
@@ -116,6 +143,18 @@ export function ScheduleView({
               }
             })
           }
+          onUnpublish={() =>
+            startPublish(async () => {
+              const result = await unpublishWeekAction(location.id, weekStart)
+              const locked = result.locked ?? 0
+              const message =
+                `Took ${result.unpublished} shift${result.unpublished === 1 ? '' : 's'} back to draft.` +
+                // The cutoff is the reason a week can come down only partly, so
+                // saying so beats leaving the manager to count rows.
+                (locked > 0 ? ` ${locked} too close to start to unpublish.` : '')
+              if (toast.report(result, message)) router.refresh()
+            })
+          }
         />
 
         {view === 'calendar' ? (
@@ -125,7 +164,8 @@ export function ScheduleView({
             staff={visibleStaff}
             shifts={visibleShifts}
             search={filters.search}
-            canEdit={canEdit}
+            canEdit={canMutate}
+            showLocation={combined}
             onSearchChange={(search) => setFilters({ ...filters, search })}
             onAddShift={(member, day) => setAssignTarget({ member, day })}
             onFindCoverage={setCoverageShift}
@@ -144,7 +184,8 @@ export function ScheduleView({
             today={today}
             staff={visibleStaff}
             shifts={visibleShifts}
-            canEdit={canEdit}
+            canEdit={canMutate}
+            showLocation={combined}
             onEditShift={(shift) => setEditorTarget({ mode: 'edit', day: shift.localDate, shift })}
             onFindCoverage={setCoverageShift}
           />
@@ -155,7 +196,7 @@ export function ScheduleView({
         target={editorTarget}
         locationId={location.id}
         days={days}
-        skills={availableSkills(shifts)}
+        skills={skills}
         onOpenChange={(next) => !next && setEditorTarget(null)}
       />
 

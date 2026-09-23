@@ -163,6 +163,7 @@ cancels any pending request against it.
 ## Data model
 
 16 tables. Full diagram and rationale in [docs/schema.md](docs/schema.md);
+how the pieces fit together in [docs/architecture.md](docs/architecture.md);
 design decisions and assumptions in [docs/decisions.md](docs/decisions.md).
 
 The one deliberate denormalization: `assignments` copies `starts_at`/`ends_at`

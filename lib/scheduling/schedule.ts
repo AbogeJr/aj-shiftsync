@@ -1,9 +1,12 @@
 import { asc, eq, sql } from 'drizzle-orm'
+import { ALL_LOCATIONS } from './week-view'
 import { db as defaultDb, type Db } from '@/lib/db'
-import { locations, managerLocations, staff } from '@/lib/db/schema'
+import { locations, managerLocations, staff, skills as skillsTable } from '@/lib/db/schema'
 import { getSession, requireRole } from '@/lib/auth'
 import { requireLocationVisibility } from './access'
 import { NotFoundError } from './errors'
+
+export { ALL_LOCATIONS }
 
 export interface ScheduleLocation {
   id: string
@@ -22,6 +25,9 @@ export interface ScheduleStaff {
 
 export interface ScheduleShift {
   id: string
+  /** Carried on the shift so a combined week can label and route each block. */
+  locationId: string
+  locationName: string
   /** Local calendar date at the location, YYYY-MM-DD. */
   localDate: string
   /** Local wall-clock HH:MM at the location. */
@@ -47,6 +53,19 @@ export interface WeekSchedule {
   days: string[]
   staff: ScheduleStaff[]
   shifts: ScheduleShift[]
+}
+
+/**
+ * The skills catalogue.
+ *
+ * What a *new* shift may require is the closed set from the skills table, not
+ * the skills the current week happens to use - deriving it from existing shifts
+ * is circular, and leaves an empty location with no skills to choose from.
+ */
+export async function listSkills(db: Db = defaultDb): Promise<string[]> {
+  await requireRole('admin', 'manager', 'staff')
+  const rows = await db.select({ name: skillsTable.name }).from(skillsTable).orderBy(asc(skillsTable.name))
+  return rows.map((r) => r.name)
 }
 
 /**
@@ -188,6 +207,8 @@ export async function getWeekSchedule(
     })),
     shifts: shiftRows.rows.map((r) => ({
       id: r.id,
+      locationId: location.id,
+      locationName: location.name,
       localDate: r.local_date,
       startLocal: r.start_local,
       endLocal: r.end_local,
@@ -202,6 +223,47 @@ export async function getWeekSchedule(
         (r.assigned ?? []).map((staffId, i) => [staffId, (r.assignment_ids ?? [])[i]]),
       ),
     })),
+  }
+}
+
+/**
+ * Every accessible location's week, merged into one.
+ *
+ * Merging is only coherent because each field is already location-relative:
+ * `days` is calendar arithmetic on `weekStart` and identical everywhere, and
+ * each shift's `localDate` is computed in its *own* location's timezone. So a
+ * shift lands in the column of the day the person turns up, which is the same
+ * rule consecutive-day counting uses.
+ *
+ * Reuses `getWeekSchedule` per location rather than reimplementing the query.
+ * That is N round trips for N locations - fine at four, and worth the certainty
+ * that the combined view can never disagree with the single-location one.
+ */
+export async function getCombinedWeekSchedule(
+  weekStart: string,
+  db: Db = defaultDb,
+): Promise<WeekSchedule> {
+  const accessible = await listAccessibleLocations(db)
+  const weeks = await Promise.all(
+    accessible.map((location) => getWeekSchedule(location.id, weekStart, db)),
+  )
+
+  // Somebody certified at three locations is still one person, one grid row.
+  const staff = new Map<string, ScheduleStaff>()
+  for (const week of weeks) {
+    for (const member of week.staff) staff.set(member.id, member)
+  }
+
+  return {
+    location: {
+      id: ALL_LOCATIONS,
+      name: 'All locations',
+      // No single zone applies; each shift already renders in its own.
+      timezone: `${accessible.length} location${accessible.length === 1 ? '' : 's'}`,
+    },
+    days: weeks[0]?.days ?? [],
+    staff: [...staff.values()].sort((a, b) => a.name.localeCompare(b.name)),
+    shifts: weeks.flatMap((week) => week.shifts),
   }
 }
 
@@ -220,6 +282,3 @@ export async function todayAtLocation(tz: string, db: Db = defaultDb): Promise<s
   return r.rows[0].d
 }
 
-export async function currentSessionRole(): Promise<string | null> {
-  return (await getSession())?.role ?? null
-}
