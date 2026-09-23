@@ -1,27 +1,65 @@
 'use client'
 
-import { useEffect, useRef, useTransition } from 'react'
+import { useTransition, type ReactNode } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast'
 import { useRefreshUnread } from '@/components/layout/notification-watcher'
-import { markAllReadAction, setEmailSimulationAction } from '../actions'
+import { markAllReadAction, markReadAction, setEmailSimulationAction } from '../actions'
 
-/**
- * Opening the page is the read receipt. The list is deliberately not refreshed
- * afterwards, so what was new stays highlighted until you navigate away.
- */
-export function MarkReadOnView({ unread }: { unread: number }) {
+export function MarkAllRead({ disabled }: { disabled: boolean }) {
+  const router = useRouter()
+  const toast = useToast()
   const refreshUnread = useRefreshUnread()
-  const done = useRef(false)
+  const [pending, start] = useTransition()
+  return (
+    <Button
+      size="sm"
+      disabled={disabled || pending}
+      onClick={() =>
+        start(async () => {
+          const result = await markAllReadAction()
+          if (toast.report(result, 'All caught up.')) {
+            refreshUnread()
+            router.refresh()
+          }
+        })
+      }
+    >
+      {pending ? '\u2026' : 'Mark all read'}
+    </Button>
+  )
+}
 
-  useEffect(() => {
-    if (unread === 0 || done.current) return
-    done.current = true
-    void markAllReadAction().then(() => refreshUnread())
-  }, [unread, refreshUnread])
+/** Reading one is what marks it read; the navigation happens either way. */
+export function NotificationLink({
+  id,
+  href,
+  read,
+  children,
+}: {
+  id: string
+  href: string
+  read: boolean
+  children: ReactNode
+}) {
+  const refreshUnread = useRefreshUnread()
 
-  return null
+  return (
+    <Link
+      href={href}
+      onClick={() => {
+        if (read) return
+        void markReadAction(id).then(() => refreshUnread())
+      }}
+      className={`-mx-2 flex items-start gap-3 rounded-lg px-2 py-3 hover:bg-slate-50 ${
+        read ? 'opacity-60' : ''
+      }`}
+    >
+      {children}
+    </Link>
+  )
 }
 
 export function EmailToggle({ enabled }: { enabled: boolean }) {

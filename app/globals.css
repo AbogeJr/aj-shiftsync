@@ -32,3 +32,12 @@ body {
 .tabular {
   font-variant-numeric: tabular-nums;
 }
+
+/* Landing-page texture. Masked so the grid fades out before the fold rather
+   than tiling flatly to the edges. */
+.dot-grid {
+  background-image: radial-gradient(circle, #babdc2 1px, transparent 1px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(115% 80% at 50% 0%, #000 45%, transparent 100%);
+  mask-image: radial-gradient(115% 80% at 50% 0%, #000 45%, transparent 100%);
+}

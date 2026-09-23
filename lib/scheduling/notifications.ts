@@ -149,6 +149,15 @@ export async function myNotifications(
   }
 }
 
+/** Scoped to the caller, so an id from somebody else's list does nothing. */
+export async function markRead(id: string, db: Db = defaultDb): Promise<void> {
+  const session = await requireRole('admin', 'manager', 'staff')
+  await db.execute(sql`
+    UPDATE notifications SET read_at = now()
+    WHERE id = ${id} AND staff_id = ${session.userId} AND read_at IS NULL
+  `)
+}
+
 export async function markAllRead(db: Db = defaultDb): Promise<void> {
   const session = await requireRole('admin', 'manager', 'staff')
   await db.execute(sql`

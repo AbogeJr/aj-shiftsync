@@ -3,8 +3,7 @@ import { Badge, Card, EmptyState, PageHeader } from '@/components/ui/feedback'
 import { handleAuthError } from '@/components/layout/protected-page'
 import { getSession } from '@/lib/auth'
 import { emailSimulationEnabled, myNotifications } from '@/lib/scheduling/notifications'
-import Link from 'next/link'
-import { EmailToggle, MarkReadOnView } from './_components/controls'
+import { EmailToggle, MarkAllRead, NotificationLink } from './_components/controls'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,9 +23,8 @@ export default async function NotificationsPage() {
       <PageHeader
         title="Notifications"
         subtitle={data.unread > 0 ? `${data.unread} unread` : 'All caught up'}
+        action={<MarkAllRead disabled={data.unread === 0} />}
       />
-
-      <MarkReadOnView unread={data.unread} />
 
       <div className="flex-1 space-y-4 overflow-auto p-4 sm:p-6">
         <Card title="Preferences">
@@ -44,12 +42,7 @@ export default async function NotificationsPage() {
             <ul className="divide-y divide-slate-100">
               {data.items.map((item) => (
                 <li key={item.id}>
-                  <Link
-                    href={item.href}
-                    className={`-mx-2 flex items-start gap-3 rounded-lg px-2 py-3 hover:bg-slate-50 ${
-                      item.read ? 'opacity-60' : ''
-                    }`}
-                  >
+                  <NotificationLink id={item.id} href={item.href} read={item.read}>
                     <span
                       aria-hidden
                       className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${
@@ -64,7 +57,7 @@ export default async function NotificationsPage() {
                       <Badge>{item.type}</Badge>
                       <p className="mt-1 text-xs tabular text-slate-400">{item.createdAt}</p>
                     </div>
-                  </Link>
+                  </NotificationLink>
                 </li>
               ))}
             </ul>
