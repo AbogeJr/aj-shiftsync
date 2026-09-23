@@ -131,3 +131,20 @@ export function weekTotals(
 
 /** Above this, the row is flagged as heading into overtime. */
 export const OVERTIME_HOURS = 40
+
+/**
+ * Bucket a staff member's own items into the seven day columns.
+ *
+ * Grouping is on the shift's local date rather than its instant, so an
+ * overnight shift stays in the column of the day it starts - the day the person
+ * actually turns up. Every day is seeded so empty columns still render.
+ */
+export function groupByLocalDate<T extends { localDate: string; startLocal: string }>(
+  items: T[],
+  days: string[],
+): Map<string, T[]> {
+  const byDay = new Map<string, T[]>(days.map((day) => [day, []]))
+  for (const item of items) byDay.get(item.localDate)?.push(item)
+  for (const list of byDay.values()) list.sort((a, b) => a.startLocal.localeCompare(b.startLocal))
+  return byDay
+}
