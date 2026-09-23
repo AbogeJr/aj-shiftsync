@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import { asc, eq, sql } from 'drizzle-orm'
 import { ALL_LOCATIONS } from './week-view'
 import { db as defaultDb, type Db } from '@/lib/db'
@@ -75,6 +76,16 @@ export async function listSkills(db: Db = defaultDb): Promise<string[]> {
  * they are certified for - they can read a schedule they might be put on.
  */
 export async function listAccessibleLocations(db: Db = defaultDb): Promise<ScheduleLocation[]> {
+  // Deduplicated for the request, but only on the shared pool: a caller passing
+  // a transaction wants that transaction's view, which must not be reused
+  // outside it or served from a cache filled before it began.
+  if (db === defaultDb) return cachedAccessibleLocations()
+  return loadAccessibleLocations(db)
+}
+
+const cachedAccessibleLocations = cache(() => loadAccessibleLocations(defaultDb))
+
+async function loadAccessibleLocations(db: Db): Promise<ScheduleLocation[]> {
   const session = await requireRole('admin', 'manager', 'staff')
   const columns = { id: locations.id, name: locations.name, timezone: locations.timezone }
 

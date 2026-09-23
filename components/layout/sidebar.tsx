@@ -20,6 +20,10 @@ export function SidebarNav({ role, onNavigate }: { role: string; onNavigate?: ()
           return (
             <li key={href}>
               <Link
+                // Every screen is force-dynamic, so a prefetch is a full server
+                // render with its own queries. Hovering the rail would re-render
+                // the whole app for a hint the router cannot keep for long.
+                prefetch={false}
                 href={href}
                 onClick={onNavigate}
                 aria-current={active ? 'page' : undefined}

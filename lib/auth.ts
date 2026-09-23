@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { cookies } from 'next/headers'
 import { eq, sql } from 'drizzle-orm'
@@ -99,15 +100,28 @@ export async function getSession(): Promise<SessionPayload | null> {
  * session survives until expiry and fails late with a foreign-key error inside
  * a transaction, and a demoted manager keeps manager access.
  */
+/**
+ * The authorisation read, deduplicated for the lifetime of one request.
+ *
+ * Every service function calls requireRole, and a page calls several of them,
+ * so this fired once per service - six identical lookups to render one screen.
+ * React's cache() is request-scoped, so two people's sessions can never share
+ * an entry, and a role change is still picked up on the very next request.
+ */
+const loadActor = cache(async (userId: string) => {
+  const [row] = await db
+    .select({ id: staff.id, role: staff.role })
+    .from(staff)
+    .where(eq(staff.id, userId))
+    .limit(1)
+  return row ?? null
+})
+
 export async function requireRole(...allowed: Role[]): Promise<SessionPayload> {
   const session = await getSession()
   if (!session) throw new UnauthorizedError()
 
-  const [row] = await db
-    .select({ id: staff.id, role: staff.role })
-    .from(staff)
-    .where(eq(staff.id, session.userId))
-    .limit(1)
+  const row = await loadActor(session.userId)
 
   if (!row) throw new UnauthorizedError()
   if (!allowed.includes(row.role)) throw new ForbiddenError(allowed, row.role)
