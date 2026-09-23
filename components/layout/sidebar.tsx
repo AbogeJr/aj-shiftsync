@@ -27,7 +27,7 @@ export function SidebarNav({ role, onNavigate }: { role: string; onNavigate?: ()
                 href={href}
                 onClick={onNavigate}
                 aria-current={active ? 'page' : undefined}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors lg:flex-col lg:gap-1 lg:px-1 lg:py-2 lg:text-[11px] ${
+                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors lg:flex-col lg:gap-1 lg:px-1 lg:py-2 lg:text-[11px] lg:whitespace-nowrap ${
                   active
                     ? 'bg-slate-700 text-white'
                     : 'text-slate-400 hover:bg-slate-800 hover:text-white'
@@ -54,7 +54,7 @@ export function SidebarNav({ role, onNavigate }: { role: string; onNavigate?: ()
       <form action={logout} className="mt-2">
         <button
           type="submit"
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-400 transition-colors hover:bg-slate-800 hover:text-white lg:flex-col lg:gap-1 lg:px-1 lg:py-2 lg:text-[11px]"
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-400 transition-colors hover:bg-slate-800 hover:text-white lg:flex-col lg:gap-1 lg:px-1 lg:py-2 lg:text-[11px] lg:whitespace-nowrap"
         >
           <Logout className="h-5 w-5 shrink-0" />
           Log out

@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm'
 import { db as defaultDb, type Db, type Tx } from '@/lib/db'
-import { requireRole } from '@/lib/auth'
+import { requireRole, type Role } from '@/lib/auth'
 import { publishNotification } from '@/lib/realtime/bus'
 
 /**
@@ -93,6 +93,18 @@ export interface NotificationRow {
   body: string | null
   createdAt: string
   read: boolean
+  /** Where clicking it takes you. */
+  href: string
+}
+
+/** Swaps land on whichever queue that role acts from; everything else is a shift. */
+export function notificationHref(type: string, role: Role): string {
+  if (type === 'compliance.warning') return role === 'staff' ? '/my-availability' : '/team'
+  if (type === 'swap.accepted' || type === 'swap.requested') {
+    return role === 'staff' ? '/my-requests' : '/requests'
+  }
+  if (type.startsWith('swap.')) return '/my-requests'
+  return '/my-shifts'
 }
 
 export async function myNotifications(
@@ -131,6 +143,7 @@ export async function myNotifications(
       body: r.body,
       createdAt: r.created_at,
       read: r.read,
+      href: notificationHref(r.type, session.role),
     })),
     unread: unread.rows[0]?.n ?? 0,
   }

@@ -21,7 +21,7 @@ export function AppShell({ role, children }: { role: string; children: ReactNode
     <NotificationWatcher>
     <div className="flex h-dvh bg-slate-50">
       {/* desktop rail */}
-      <nav className="hidden w-20 shrink-0 flex-col gap-1 bg-slate-900 p-2 lg:flex">
+      <nav className="hidden w-24 shrink-0 flex-col gap-1 bg-slate-900 p-2 lg:flex">
         <div className="mb-2 flex h-9 items-center justify-center">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500 text-sm font-bold text-white">
             S

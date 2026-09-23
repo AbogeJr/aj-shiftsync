@@ -1,29 +1,27 @@
 'use client'
 
-import { useTransition } from 'react'
+import { useEffect, useRef, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast'
+import { useRefreshUnread } from '@/components/layout/notification-watcher'
 import { markAllReadAction, setEmailSimulationAction } from '../actions'
 
-export function MarkAllRead({ disabled }: { disabled: boolean }) {
-  const router = useRouter()
-  const toast = useToast()
-  const [pending, start] = useTransition()
-  return (
-    <Button
-      size="sm"
-      disabled={disabled || pending}
-      onClick={() =>
-        start(async () => {
-          const result = await markAllReadAction()
-          if (toast.report(result, 'All caught up.')) router.refresh()
-        })
-      }
-    >
-      {pending ? '…' : 'Mark all read'}
-    </Button>
-  )
+/**
+ * Opening the page is the read receipt. The list is deliberately not refreshed
+ * afterwards, so what was new stays highlighted until you navigate away.
+ */
+export function MarkReadOnView({ unread }: { unread: number }) {
+  const refreshUnread = useRefreshUnread()
+  const done = useRef(false)
+
+  useEffect(() => {
+    if (unread === 0 || done.current) return
+    done.current = true
+    void markAllReadAction().then(() => refreshUnread())
+  }, [unread, refreshUnread])
+
+  return null
 }
 
 export function EmailToggle({ enabled }: { enabled: boolean }) {
