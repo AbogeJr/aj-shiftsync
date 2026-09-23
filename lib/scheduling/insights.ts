@@ -5,9 +5,8 @@ import { WEEKLY_OVERTIME_AT, WEEKLY_WARNING_AT } from './eligibility'
 import { listAccessibleLocations } from './schedule'
 
 /**
- * How far ahead an unfilled slot counts as urgent. Two days is the brief's
- * scenario window - a Sunday call-out for a Sunday shift - and it matches the
- * default edit cutoff, so the shifts flagged here are the ones still editable.
+ * How far ahead an unfilled slot counts as urgent. Two days matches the default
+ * edit cutoff, so the shifts flagged here are the ones still editable.
  */
 export const COVERAGE_HORIZON_HOURS = 48
 
@@ -250,7 +249,7 @@ export async function fairnessReport(
 }
 
 /**
- * The overtime premium rate. The brief sets the 40-hour threshold but not what
+ * The overtime premium rate. The 40-hour threshold says nothing about what
  * overtime pays, so this is the US FLSA default of time-and-a-half. One
  * constant, because a group operating under a different rule changes it here
  * and every projection follows.
@@ -275,7 +274,7 @@ export interface OvertimeProjection {
 }
 
 /**
- * Projected overtime for the week (brief §4).
+ * Projected overtime for the week.
  *
  * Pure derivation over rows `teamOverview` has already loaded, so it needs no
  * database and is unit-testable. Hours are totalled across every location -
@@ -327,7 +326,7 @@ export interface FairnessScore {
 }
 
 /**
- * Is premium work shared out fairly? (brief §5)
+ * Is premium work shared out fairly?
  *
  * The benchmark is each person's share of the hours actually worked, not an
  * equal split: somebody on eight hours a week should not expect as many Friday
@@ -393,7 +392,7 @@ export interface OvertimeCulprit {
 }
 
 /**
- * Which assignment took each person into overtime (brief §4).
+ * Which assignment took each person into overtime.
  *
  * "Which one" has no single right answer - remove any of the week's shifts and
  * the total drops the same. The convention here is chronological: shifts are

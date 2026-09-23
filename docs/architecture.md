@@ -1,18 +1,15 @@
 # ShiftSync architecture
 
-One Node service on Railway, one Postgres. Editable source:
-[`architecture.excalidraw`](architecture.excalidraw) — open it at
-[excalidraw.com](https://excalidraw.com) via *Open*. The diagram below is the
-same thing, so it renders here.
+One long-running Node service on Railway, one Postgres.
 
 ```mermaid
 flowchart TB
     browser["<b>Browser</b><br/>React client components"]
 
-    subgraph nextjs["Next.js — one long-running Node service"]
+    subgraph nextjs["Next.js"]
         actions["<b>Server Actions</b><br/>app/*/actions.ts"]
         pages["<b>Server Components</b><br/>app/*/page.tsx"]
-        routes["<b>Route Handlers</b><br/>/api/events · /api/notifications"]
+        routes["<b>Route Handlers</b><br/>/api/events · /api/notifications · /api/health"]
     end
 
     service["<b>lib/scheduling/*</b><br/>all business logic, as plain functions"]
@@ -27,14 +24,14 @@ flowchart TB
     pages --> service
     routes --> service
     service -- "read + write" --> pg
-    service -. "publish after commit" .-> bus
+    service -. publish .-> bus
     bus -. subscribe .-> routes
 
-    classDef client fill:#a5d8ff,stroke:#1971c2
-    classDef app    fill:#d0bfff,stroke:#6741d9
-    classDef logic  fill:#b2f2bb,stroke:#2f9e44
-    classDef data   fill:#ffd8a8,stroke:#e8590c
-    classDef live   fill:#ffdeeb,stroke:#c2255c
+    classDef client fill:#a5d8ff,stroke:#1971c2,color:#111827
+    classDef app    fill:#d0bfff,stroke:#6741d9,color:#111827
+    classDef logic  fill:#b2f2bb,stroke:#2f9e44,color:#111827
+    classDef data   fill:#ffd8a8,stroke:#e8590c,color:#111827
+    classDef live   fill:#ffdeeb,stroke:#c2255c,color:#111827
     class browser client
     class actions,pages,routes app
     class service logic
@@ -44,19 +41,26 @@ flowchart TB
 
 ## The three flows
 
-**Write** — Browser → Server Action → service → Postgres. Actions are thin
-wrappers; they authorize nothing and decide nothing. The **constraint**, not the
-application, is what refuses an illegal schedule, so it holds no matter what
-writes to the table.
+**Write.** Browser, server action, service, Postgres. Actions are thin wrappers:
+they catch errors and revalidate, nothing else. Authorization and every rule
+live in the service. The exclusion constraint, not the application, is what
+refuses an overlapping or short-rest assignment, so it holds whatever writes to
+the table.
 
-**Read** — Server Component → service → Postgres, rendered on the server. Pages
-never query directly.
+**Read.** Server component, service, Postgres, rendered on the server. No page
+queries the database directly.
 
-**Realtime** — a hint, never data. The service publishes *after* the transaction
-commits, the stream nudges the browser, and the browser refetches the read path
-above. A missed event therefore costs one redundant query rather than a stale
-roster — and clients refetch on reconnect for the same reason.
+**Realtime.** The stream carries a hint, never data. A client refetches on every
+event and on every reconnect, so an event missed while disconnected costs one
+redundant query instead of a stale roster.
 
-The bus is in-process, which assumes a single instance. Swapping it for Postgres
-`LISTEN`/`NOTIFY` changes only that one file — the reasoning is under
-"Decisions the brief did not raise" in [decisions.md](decisions.md).
+Schedule changes are published **after** the transaction commits, because an
+emitter has no rollback. Notification hints are published **inside** it, which
+is safe for the same reason the payload is a hint: if the transaction rolls
+back, the client refetches and finds nothing new.
+
+## Known shape
+
+The bus is in-process, so fan-out assumes a single instance. Moving to Postgres
+`LISTEN`/`NOTIFY` changes only `lib/realtime/bus.ts`. See
+[decisions.md](decisions.md).

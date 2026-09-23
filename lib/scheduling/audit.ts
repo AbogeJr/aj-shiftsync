@@ -5,7 +5,7 @@ import { requireLocationAccess } from './access'
 import { listAccessibleLocations } from './schedule'
 
 /**
- * The audit trail (brief §9).
+ * The audit trail.
  *
  * Rows outlive what they describe: entity_type/entity_id are polymorphic with
  * no foreign key, and actor/location are ON DELETE SET NULL, so deleting a
@@ -124,7 +124,7 @@ export async function auditTrail(
 }
 
 /**
- * History of one shift, for the brief's "view the history of any shift".
+ * History of one shift.
  *
  * Matching happens in SQL rather than by filtering a page of the general trail:
  * a shift's own entries can be arbitrarily far back, so any LIMIT applied before
@@ -164,7 +164,7 @@ function csvCell(value: string | null): string {
   return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
 }
 
-/** Admin-only CSV export (brief §9). */
+/** Admin-only CSV export. */
 export async function exportAuditCsv(query: AuditQuery, db: Db = defaultDb): Promise<string> {
   await requireRole('admin')
   const entries = await auditTrail(query, 10_000, db)

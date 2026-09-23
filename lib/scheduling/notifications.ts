@@ -4,14 +4,14 @@ import { requireRole, type Role } from '@/lib/auth'
 import { publishNotification } from '@/lib/realtime/bus'
 
 /**
- * Persisted notifications (brief §7).
+ * Persisted notifications.
  *
  * Writes take the transaction handle wherever one exists, so a notification
  * cannot survive a rolled-back change: nobody is told about a shift that was
  * never assigned.
  *
  * Email is *simulated* - a row in email_log rather than an actual send - which
- * is what the brief asks for and keeps the demo self-contained.
+ * keeps the demo self-contained.
  */
 
 export type NotificationType =

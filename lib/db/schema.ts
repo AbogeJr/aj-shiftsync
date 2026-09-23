@@ -41,8 +41,8 @@ export const availabilityExceptionKind = pgEnum('availability_exception_kind', [
 export const swapRequestKind = pgEnum('swap_request_kind', ['swap', 'drop'])
 
 /**
- * Peer acceptance and manager approval are distinct steps: the brief requires
- * the original assignment to stand until a manager approves.
+ * Peer acceptance and manager approval are distinct steps, so the original
+ * assignment stands until a manager approves.
  */
 export const swapRequestStatus = pgEnum('swap_request_status', [
   'open',
@@ -58,7 +58,7 @@ export const locations = pgTable('locations', {
   name: text('name').notNull(),
   // IANA identifier, never a fixed UTC offset.
   timezone: text('timezone').notNull(),
-  /** How long before a shift starts the schedule locks. Brief default: 48h. */
+  /** How long before a shift starts the schedule locks. Defaults to 48h. */
   editCutoffHours: integer('edit_cutoff_hours').notNull().default(48),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()

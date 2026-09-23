@@ -75,7 +75,7 @@ export async function unpublishWeekAction(
   }
 }
 
-/** Brief §9: the history of one shift. Loaded on demand, not with the grid. */
+/** The history of one shift. Loaded on demand, not with the grid. */
 export async function shiftHistoryAction(
   shiftId: string,
 ): Promise<{ ok: true; data: AuditEntry[] } | { ok: false; error: string }> {

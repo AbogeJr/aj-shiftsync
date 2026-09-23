@@ -47,7 +47,7 @@ export default async function OverviewPage({
   const draftLocations = locations.filter((l) => l.draftShifts > 0)
 
   const overtime = overtimeProjection(team)
-  // Brief §4: not just who is in overtime, but which shift put them there.
+  // Not just who is in overtime, but which shift put them there.
   const culprits = new Map(attributeOvertime(assignments).map((c) => [c.staffId, c]))
 
   const days = Array.from({ length: 7 }, (_, i) => {

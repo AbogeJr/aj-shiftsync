@@ -67,7 +67,7 @@ const PEOPLE = [
   ['Phyllis Vance', 'staff', 'America/New_York', 40, 2700, ['bartender'], ['village']],
   ['Kelly Kapoor', 'staff', 'America/New_York', 20, 2200, ['host', 'server'], ['backbay']],
   ['Andy Bernard', 'manager', 'America/New_York', 40, 4400, ['line cook'], ['village', 'backbay']],
-  // Certified in BOTH timezones - the brief's "Timezone Tangle" scenario.
+  // Certified in BOTH timezones, so one availability window spans two clocks.
   ['Oscar Martinez', 'staff', 'America/Los_Angeles', 38, 2800, ['server', 'bartender'], ['santa', 'village']],
 ] as const
 
@@ -198,7 +198,7 @@ async function main() {
     [2, 'Angela Martin'],
     [6, 'Kevin Malone'],
     // Oscar works BOTH a Pacific and an Eastern location in the same week:
-    // the brief's Timezone Tangle, and what cross-location load looks like.
+    // one availability window across two clocks, and cross-location load.
     [7, 'Oscar Martinez'],
     [11, 'Oscar Martinez'],
     [9, 'Stanley Hudson'],

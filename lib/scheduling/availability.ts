@@ -6,7 +6,7 @@ import { SwapError } from './errors'
 import { WEEKDAYS } from '@/lib/format'
 
 /**
- * Staff set their own availability (brief §1).
+ * Staff set their own availability.
  *
  * Stored as wall-clock time plus the staff member's own IANA timezone, never as
  * an instant: "I'm free 09:00-17:00 on Tuesdays" has to stay true across a DST
@@ -126,7 +126,7 @@ export async function myAvailability(db: Db = defaultDb): Promise<MyAvailability
   }
 }
 
-/** Managers are told when someone's availability moves (brief §7). */
+/** Managers are told when someone's availability moves. */
 async function announce(db: Db, staffId: string, what: string) {
   const locations = await db.execute<{ location_id: string }>(sql`
     SELECT DISTINCT location_id FROM certifications

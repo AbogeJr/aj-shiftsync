@@ -73,7 +73,7 @@ describe('eligibility rules', () => {
   it('blocks past the daily hard limit, which no override can lift', () => {
     expect(codes({ dailyHours: DAILY_HARD_LIMIT + 0.5 })).toContain('daily_limit')
     expect(codes({ dailyHours: DAILY_HARD_LIMIT })).not.toContain('daily_limit')
-    // Explicitly not overridable - the brief calls 12 hours a hard block.
+    // Explicitly not overridable: 12 hours in a day is a hard block.
     expect(codes({ dailyHours: 13, overrideProvided: true })).toContain('daily_limit')
   })
 

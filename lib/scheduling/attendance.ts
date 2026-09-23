@@ -6,7 +6,7 @@ import { listAccessibleLocations } from './schedule'
 import { NotFoundError, SwapError } from './errors'
 
 /**
- * Clocking in and out (brief §6).
+ * Clocking in and out.
  *
  * Attendance is deliberately separate from the schedule: `starts_at` is what
  * was planned, `clocked_in_at` is what happened. The on-duty board reads the

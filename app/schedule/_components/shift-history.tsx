@@ -11,7 +11,7 @@ function label(action: string): string {
 }
 
 /**
- * Brief §9: "managers can view the history of any shift."
+ * Every change to one shift, for a manager who needs to see what happened.
  *
  * Collapsed and loaded on first open rather than fetched with the editor - most
  * times a shift is edited nobody wants the log, and it is a second round trip.

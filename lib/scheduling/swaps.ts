@@ -16,7 +16,7 @@ import {
 } from './errors'
 
 /**
- * Swap and drop requests (brief §3).
+ * Swap and drop requests.
  *
  * The workflow is deliberately two-staged: a peer accepts, then a manager
  * approves, and the ORIGINAL assignment stands until that approval. Nothing
@@ -260,7 +260,7 @@ export async function acceptRequest(
 }
 
 /**
- * The requester changes their mind - the brief's "Regret Swap".
+ * The requester changes their mind.
  *
  * Allowed at any point before a manager approves, because nothing has moved on
  * the schedule yet. Once approved there is no request left to cancel.

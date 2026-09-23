@@ -31,8 +31,9 @@ export interface CoverageSuggestions {
 /**
  * Who can cover this shift, and why everyone else cannot.
  *
- * The brief asks for alternatives when an assignment is refused ("Sarah is
- * unavailable, but John and Maria have the required skill and availability").
+ * A refusal should come with alternatives: "Sarah is unavailable, but John and
+ * Maria have the required skill and are free".
+ *
  * This runs the same rules the write path enforces, so a suggestion can never
  * disagree with what the service will accept.
  *

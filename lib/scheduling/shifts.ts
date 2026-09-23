@@ -3,11 +3,14 @@ import { db as defaultDb, type Db } from '@/lib/db'
 import { publishScheduleChange } from '@/lib/realtime/bus'
 import { notify, notifyAll } from './notifications'
 import { recordAudit } from './audit'
+import { evaluateEligibility } from './eligibility'
+import { loadEligibility } from './eligibility-query'
 import { authorizeLocation, SESSION_ACTOR, type Actor } from './access'
 import {
   ConcurrentEditError,
   ConflictError,
   CutoffError,
+  EligibilityError,
   isExclusionViolation,
   NO_OVERLAP_OR_SHORT_REST,
   NotFoundError,
@@ -155,6 +158,28 @@ export async function updateShift(
 
       if (updated.rows.length === 0) throw new ConcurrentEditError()
 
+      // An edit can strand whoever is already on the shift: a new required skill
+      // they do not hold, or new hours outside their availability. Checked
+      // against the same rules an assignment goes through, so the two can never
+      // disagree, and refused rather than auto-unassigned - matching how a time
+      // change that breaks the rest constraint behaves.
+      const stranded = (await loadEligibility(tx, input.shiftId))
+        .filter((e) => e.context.alreadyAssigned)
+        .flatMap(({ context }) =>
+          evaluateEligibility({ ...context, alreadyAssigned: false })
+            .filter((v) => v.code === 'missing_skill' || v.code === 'outside_availability')
+            .map((v) => ({ ...v, staffName: context.staffName })),
+        )
+
+      if (stranded.length > 0) {
+        throw new EligibilityError(
+          stranded.map((v) => ({
+            code: v.code,
+            message: `${v.message} Unassign them first, or change the shift differently.`,
+          })),
+        )
+      }
+
       await recordAudit(tx, {
         locationId: row.location_id,
         entityType: 'shift',
@@ -176,7 +201,7 @@ export async function updateShift(
         WHERE shift_id = ${input.shiftId} AND status = 'active'
       `)
 
-      // Brief §3: a pending swap or drop describes a shift that no longer
+      // A pending swap or drop describes a shift that no longer
       // exists in the form it was agreed on, so it is withdrawn rather than
       // silently applied to different hours.
       const affected = await tx.execute<{ staff_id: string }>(sql`
@@ -354,8 +379,7 @@ export async function publishWeek(
 }
 
 /**
- * Take a week back off the board (brief §2: "unpublish ... before a
- * configurable cutoff").
+ * Take a week back off the board.
  *
  * Shifts already inside their location's lock window are left alone rather than
  * failing the whole call: somebody turning up tomorrow should not have their

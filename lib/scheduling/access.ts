@@ -24,8 +24,7 @@ export const SESSION_ACTOR: Actor = { kind: 'session' }
  * Who may put `staffId` on this shift.
  *
  * Managers and admins schedule anyone at locations they run. A staff member may
- * only claim an *open, published* shift for themselves - that is the brief's
- * "pick up available shifts they're qualified for". Publication is the gate:
+ * only claim an *open, published* shift for themselves. Publication is the gate:
  * a draft schedule is not visible to staff, so it cannot be claimed either.
  *
  * Eligibility (skill, certification, availability, headcount) is checked

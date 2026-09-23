@@ -1,5 +1,5 @@
 /**
- * Eligibility rules from the brief that a table constraint cannot express.
+ * Eligibility rules a table constraint cannot express.
  *
  * `evaluateEligibility` is pure over already-loaded rows, so every rule is
  * unit-testable without a database. Loading the context and taking the lock
@@ -65,7 +65,7 @@ export interface EligibilityContext {
   hasStarted: boolean
 }
 
-/** Brief §4. Daily 12h is a hard block; the 7th day needs a documented reason. */
+/** Daily 12h is a hard block; the 7th consecutive day needs a documented reason. */
 export const DAILY_HARD_LIMIT = 12
 export const DAILY_WARNING_AT = 8
 export const WEEKLY_WARNING_AT = 35
@@ -122,7 +122,7 @@ export function evaluateEligibility(ctx: EligibilityContext): EligibilityViolati
     })
   }
 
-  // The brief allows a 7th consecutive day only with a documented reason.
+  // A 7th consecutive day is allowed only with a documented reason.
   if (ctx.consecutiveDays >= 7 && !ctx.overrideProvided) {
     violations.push({
       code: 'seventh_consecutive_day',
@@ -155,7 +155,7 @@ export function evaluateEligibility(ctx: EligibilityContext): EligibilityViolati
 export function evaluateCompliance(ctx: EligibilityContext): EligibilityViolation[] {
   const warnings: EligibilityViolation[] = []
 
-  // Allowed on purpose: the brief's call-out scenario means cover is routinely
+  // Allowed on purpose: a late call-out means cover is routinely
   // found after a shift has begun. Worth flagging, not worth refusing.
   if (ctx.hasStarted && !ctx.hasEnded) {
     warnings.push({
